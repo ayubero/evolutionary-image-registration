@@ -1,0 +1,9 @@
+[package]
+name = "rgbd_renderer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.15.0"
+bevy_flycam = "*"
+image = "0.25.5"
