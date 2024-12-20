@@ -1,16 +1,17 @@
 use std::path::Path;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use image::{DynamicImage, Pixel};
+use opencv::core::{KeyPoint, KeyPointTraitConst, Vector};
 
 // Camera intrinsics (these values should come from your camera calibration; but were obtained from the dataset)
 const CENTER: [f32; 2] = [320.0, 240.0]; // Image center
 const CONSTANT: f32 = 570.3;             // Focal length (in pixels, typically in x and y directions)
 const MM_PER_M: f32 = 1000.0;            // Conversion factor (millimeters to meters)
 
-pub fn rgbd_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mesh {
+pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
     // Load the depth and color images
-    let color_image = image::open(color_image).expect("Failed to load color image");
-    let depth_image = image::open(depth_image).expect("Failed to load depth image");
+    let color_image = image::open(color_path).expect("Failed to load color image");
+    let depth_image = image::open(depth_path).expect("Failed to load depth image");
 
     // Create a mesh for the points
     let mut mesh = Mesh::new(
@@ -63,4 +64,32 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
 
     mesh
+}
+
+pub fn give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) -> Vec<[f32; 3]> {
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let depth_image = image::open(depth_path).expect("Failed to load depth image");
+    if let DynamicImage::ImageLuma16(depth_buffer) = depth_image {
+        for keypoint in keypoints.iter() {
+            let x = keypoint.pt().x as u32;
+            let y = keypoint.pt().y as u32;
+            let depth_value = depth_buffer
+                .get_pixel(x, y)
+                .channels()[0] as f32;
+
+            if depth_value != 0.0 {
+                // Convert pixel (x, y) to normalized camera coordinates
+                let x_rel = (x as f32) - CENTER[0]; // x - cx
+                let y_rel = (y as f32) - CENTER[1]; // y - cy
+
+                // Compute the 3D world coordinates
+                let world_x = (x_rel * depth_value) / CONSTANT / MM_PER_M;
+                let world_y = (y_rel * depth_value) / CONSTANT / MM_PER_M;
+                let world_z = depth_value / MM_PER_M;
+    
+                positions.push([world_x, -world_y, -world_z]);
+            }
+        }
+    }
+    positions
 }
