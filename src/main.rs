@@ -90,7 +90,7 @@ fn main() -> Result<()> {
         .add_plugins(NoCameraPlayerPlugin)
         .insert_resource(MovementSettings {
             sensitivity: 0.00015, // default: 0.00012
-            speed: 100.0,          // default: 12.0
+            speed: 10.0,          // default: 12.0
         })
         .add_systems(Startup, setup)
         .run();

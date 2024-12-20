@@ -1,8 +1,11 @@
 use std::path::Path;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use image::{DynamicImage, Pixel};
-use nalgebra::{Quaternion, Vector3};
-use ndarray::{Array2, Array3};
+
+// Camera intrinsics (these values should come from your camera calibration; but were obtained from the dataset)
+const CENTER: [f32; 2] = [320.0, 240.0]; // Image center
+const CONSTANT: f32 = 570.3;             // Focal length (in pixels, typically in x and y directions)
+const MM_PER_M: f32 = 1000.0;            // Conversion factor (millimeters to meters)
 
 pub fn rgbd_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mesh {
     // Load the depth and color images
@@ -27,10 +30,14 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mesh {
                     let depth_value = depth_buffer.get_pixel(x, y).channels()[0] as f32;
 
                     if depth_value != 0.0 {
-                        // Extract coordinates
-                        let world_x = x as f32 - width as f32 / 2.0;
-                        let world_y = y as f32 - height as f32 / 2.0;
-                        let world_z = depth_value * 0.1;
+                        // Convert pixel (x, y) to normalized camera coordinates
+                        let x_rel = (x as f32) - CENTER[0]; // x - cx
+                        let y_rel = (y as f32) - CENTER[1]; // y - cy
+
+                        // Compute the 3D world coordinates
+                        let world_x = (x_rel * depth_value) / CONSTANT / MM_PER_M;
+                        let world_y = (y_rel * depth_value) / CONSTANT / MM_PER_M;
+                        let world_z = depth_value / MM_PER_M;
             
                         positions.push([world_x, -world_y, -world_z]);
             

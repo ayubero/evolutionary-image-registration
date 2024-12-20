@@ -1,5 +1,5 @@
 [package]
-name = "rgbd_renderer"
+name = "evolutionary_image_registration"
 version = "0.1.0"
 edition = "2021"
 
