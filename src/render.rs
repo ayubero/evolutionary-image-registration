@@ -1,9 +1,10 @@
 use std::path::Path;
-
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use image::{DynamicImage, Pixel};
+use nalgebra::{Quaternion, Vector3};
+use ndarray::{Array2, Array3};
 
-pub fn rgbd_image_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mesh {
+pub fn rgbd_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mesh {
     // Load the depth and color images
     let color_image = image::open(color_image).expect("Failed to load color image");
     let depth_image = image::open(depth_image).expect("Failed to load depth image");
@@ -29,7 +30,7 @@ pub fn rgbd_image_to_mesh<T: AsRef<Path>>(color_image: T, depth_image: T) -> Mes
                         // Extract coordinates
                         let world_x = x as f32 - width as f32 / 2.0;
                         let world_y = y as f32 - height as f32 / 2.0;
-                        let world_z = depth_value;
+                        let world_z = depth_value * 0.1;
             
                         positions.push([world_x, -world_y, -world_z]);
             

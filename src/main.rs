@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
 use opencv::{
-    core::{KeyPoint, Mat, Vector}, 
-    features2d::{draw_keypoints, DrawMatchesFlags, ORB_ScoreType, ORB}, 
-    imgcodecs::{imread, imwrite, IMREAD_GRAYSCALE},
+    core::{DMatch, Mat, Vector}, 
+    features2d::{draw_matches, BFMatcher, DrawMatchesFlags, ORB_ScoreType, ORB}, 
+    imgcodecs::{imread, imwrite, IMREAD_GRAYSCALE}, 
     prelude::*, 
     Result
 };
@@ -11,10 +11,13 @@ use opencv::{
 mod render;
 
 fn main() -> Result<()> {
-    let image_path = "assets/desk_1_1.png";
-    let img = imread(image_path, IMREAD_GRAYSCALE)?;
-    if img.empty() {
-        panic!("Failed to load image at {}", image_path);
+    let img1_path = "assets/00000-color.png";
+    let img2_path = "assets/00050-color.png";
+
+    let img1 = imread(img1_path, IMREAD_GRAYSCALE)?;
+    let img2 = imread(img2_path, IMREAD_GRAYSCALE)?;
+    if img1.empty() || img2.empty() {
+        panic!("Could not load one or both images");
     }
 
     // Create ORB detector
@@ -31,32 +34,56 @@ fn main() -> Result<()> {
     )?;
 
     // Detect keypoints and compute descriptors
-    let mut keypoints = Vector::<KeyPoint>::new();
+    /*let mut keypoints = Vector::<KeyPoint>::new();
     let mut descriptors = Mat::default();
-    orb.detect_and_compute(&img, &Mat::default(), &mut keypoints, &mut descriptors, false)?;
+    orb.detect_and_compute(&img1, &Mat::default(), &mut keypoints, &mut descriptors, false)?;*/
 
-    // Print some information about the results
-    println!("Number of keypoints detected: {}", keypoints.len());
-    println!("Descriptor size: {:?}", descriptors.size()?);
+    // Detect ORB features and compute descriptors
+    let mut keypoints1 = Vector::new();
+    let mut descriptors1 = Mat::default();
+    orb.detect_and_compute(&img1, &Mat::default(), &mut keypoints1, &mut descriptors1, false)?;
 
-    // Draw keypoints on the image
-    let mut img_with_keypoints = Mat::default();
-    draw_keypoints(
-        &img, 
-        &keypoints, 
-        &mut img_with_keypoints, 
-        opencv::core::Scalar::all(-1.0), 
-        DrawMatchesFlags::DEFAULT
+    let mut keypoints2 = Vector::new();
+    let mut descriptors2 = Mat::default();
+    orb.detect_and_compute(&img2, &Mat::default(), &mut keypoints2, &mut descriptors2, false)?;
+
+    // Match features using the BFMatcher
+    let bf = BFMatcher::create(opencv::core::NORM_HAMMING, true)?;
+    let mut matches = Vector::new();
+    bf.train_match(&descriptors1, &descriptors2, &mut matches, &Mat::default())?;
+
+    // Sort matches by distance and retain the top 100
+    let mut matches_vec: Vec<_> = matches.to_vec();
+    matches_vec.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+    let top_matches = &matches_vec[..70]; // Take the top 100 matches
+
+    // Convert top matches back to OpenCV VectorOfDMatch
+    let mut top_matches_dmatch: Vector<DMatch> = Vector::new();
+    for m in top_matches {
+        top_matches_dmatch.push(*m);
+    }
+
+    println!("Number of matches: {}", matches.len());
+
+    // Draw matches on the images
+    let mut matched_image = Mat::default();
+    draw_matches(
+        &img1,
+        &keypoints1,
+        &img2,
+        &keypoints2,
+        &top_matches_dmatch,
+        &mut matched_image,
+        opencv::core::Scalar::all(-1.0),
+        opencv::core::Scalar::all(-1.0),
+        &opencv::core::Vector::new(),
+        DrawMatchesFlags::DEFAULT,
     )?;
 
-    // Save or display the image with keypoints
-    let output_path = "output_with_keypoints.png";
-    let params = Vector::<i32>::new();
-    imwrite(output_path, &img_with_keypoints, &params)?;
-
-    // Optionally, display the image in a window (if using OpenCV GUI)
-    // opencv::highgui::imshow("Keypoints", &img_with_keypoints)?;
-    // opencv::highgui::wait_key(0)?;
+    // Save the matched image
+    let output_path = "assets/matches.png";
+    imwrite(output_path, &matched_image, &opencv::core::Vector::new())?;
+    println!("Matched image saved to {}", output_path);
 
     App::new()
         .add_plugins(DefaultPlugins)
@@ -78,9 +105,9 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Get mesh from RGBD image
-    let mesh = render::rgbd_image_to_mesh(
-        "assets/desk_1_1.png", 
-        "assets/desk_1_1_depth.png"
+    let mesh = render::rgbd_to_mesh(
+        "assets/00000-color.png", 
+        "assets/00000-depth.png"
     );
 
     // Spawn the points mesh
