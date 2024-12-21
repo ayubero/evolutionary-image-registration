@@ -1,8 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use bevy::prelude::*;
+use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use bevy_flycam::prelude::*;
 use rand::Rng;
+use render::CENTER;
 
 mod orb;
 mod render;
@@ -58,16 +59,35 @@ fn setup(
             unlit: true, // Makes the points ignore lighting
             ..default()
         })),
-        Transform::default(),
+        Transform::default()
     ));
 
     // Spawn keypoints
     spawn_keypoints(&mut commands, &mut meshes, &mut materials, keypoints);
 
+    // Spawn pyramid camera
+    spawn_pyramid_camera(&mut commands, &mut meshes, &mut materials);
+
+    // Spawn commands
+    commands.spawn((
+        Text::new("Show keypoints (K)\nShow matches (M)\nRun algorithm (R)"),
+        TextFont {
+            font_size: 12.0,
+            ..Default::default()
+        },
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            left: Val::Px(10.0),
+            ..default()
+        },
+    ));
+
     // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 0.0, 0.0), //.looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(0.0, 0.0, 0.0)
+            .looking_at(Vec3::from_array([0.0, 0.0, 1.0]), Vec3::Y),
         FlyCam
     ));
 }
@@ -103,4 +123,50 @@ fn spawn_keypoints(
             Transform::from_xyz(keypoint[0], keypoint[1], keypoint[2])
         ));
     }
+}
+
+fn spawn_pyramid_camera(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>
+) {
+    // Pyramid vertices
+    const SCALE: f32 = 100.0;
+    const FOCAL: f32 = 150.0; // Made-up focal length
+    let vertices = vec![
+        Vec3::new(0.0, 0.0, 0.0),                                           // Top
+        Vec3::new(-CENTER[0]/2.0/SCALE, -CENTER[1]/2.0/SCALE, FOCAL/SCALE), // Base bottom-left
+        Vec3::new(CENTER[0]/2.0/SCALE, -CENTER[1]/2.0/SCALE, FOCAL/SCALE),  // Base bottom-right
+        Vec3::new(CENTER[0]/2.0/SCALE, CENTER[1]/2.0/SCALE, FOCAL/SCALE),   // Base top-right
+        Vec3::new(-CENTER[0]/2.0/SCALE, CENTER[1]/2.0/SCALE, FOCAL/SCALE),  // Base top-left
+    ];
+
+    // Edges of the pyramid (pairs of vertex indices)
+    let edges = vec![
+        (0, 1), (0, 2), (0, 3), (0, 4), // Sides
+        (1, 2), (2, 3), (3, 4), (4, 1), // Base
+    ];
+
+    // Create line mesh
+    let mut mesh = Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::default());
+    let positions: Vec<[f32; 3]> = edges
+        .iter()
+        .flat_map(|&(start, end)| {
+            vec![
+                vertices[start].to_array(),
+                vertices[end].to_array(),
+            ]
+        })
+        .collect();
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+
+    // Quaternion for orientation
+    //let rotation: Quat = Quat::from_xyzw(1.0, 0.0, 0.0, 0.0);
+
+    // Spawn pyramid edges
+    commands.spawn((
+        Mesh3d(meshes.add(mesh)),
+        MeshMaterial3d(materials.add(Color::WHITE))
+    ));
 }

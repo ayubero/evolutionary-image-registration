@@ -4,9 +4,9 @@ use image::{DynamicImage, Pixel};
 use opencv::core::{KeyPoint, KeyPointTraitConst, Vector};
 
 // Camera intrinsics (these values should come from your camera calibration; but were obtained from the dataset)
-const CENTER: [f32; 2] = [320.0, 240.0]; // Image center
-const CONSTANT: f32 = 570.3;             // Focal length (in pixels, typically in x and y directions)
-const MM_PER_M: f32 = 1000.0;            // Conversion factor (millimeters to meters)
+pub const CENTER: [f32; 2] = [320.0, 240.0]; // Image center
+pub const CONSTANT: f32 = 570.3;             // Focal length (in pixels, typically in x and y directions)
+pub const MM_PER_M: f32 = 1000.0;            // Conversion factor (millimeters to meters)
 
 pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
     // Load the depth and color images
@@ -16,7 +16,7 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
     // Create a mesh for the points
     let mut mesh = Mesh::new(
         PrimitiveTopology::PointList,
-        RenderAssetUsages::default(), // Use default asset usage
+        RenderAssetUsages::default() // Use default asset usage
     );
 
     let mut positions = Vec::new();
@@ -31,16 +31,7 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
                     let depth_value = depth_buffer.get_pixel(x, y).channels()[0] as f32;
 
                     if depth_value != 0.0 {
-                        // Convert pixel (x, y) to normalized camera coordinates
-                        let x_rel = (x as f32) - CENTER[0]; // x - cx
-                        let y_rel = (y as f32) - CENTER[1]; // y - cy
-
-                        // Compute the 3D world coordinates
-                        let world_x = (x_rel * depth_value) / CONSTANT / MM_PER_M;
-                        let world_y = (y_rel * depth_value) / CONSTANT / MM_PER_M;
-                        let world_z = depth_value / MM_PER_M;
-            
-                        positions.push([world_x, -world_y, -world_z]);
+                        positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
             
                         // Get the corresponding color from the color image
                         let color = color_buffer.get_pixel(x, y);
@@ -78,18 +69,22 @@ pub fn give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) ->
                 .channels()[0] as f32;
 
             if depth_value != 0.0 {
-                // Convert pixel (x, y) to normalized camera coordinates
-                let x_rel = (x as f32) - CENTER[0]; // x - cx
-                let y_rel = (y as f32) - CENTER[1]; // y - cy
-
-                // Compute the 3D world coordinates
-                let world_x = (x_rel * depth_value) / CONSTANT / MM_PER_M;
-                let world_y = (y_rel * depth_value) / CONSTANT / MM_PER_M;
-                let world_z = depth_value / MM_PER_M;
-    
-                positions.push([world_x, -world_y, -world_z]);
+                positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
             }
         }
     }
     positions
+}
+
+fn compute_world_coordinates(x: f32, y: f32, depth: f32) -> [f32; 3] {
+    // Convert pixel (x, y) to normalized camera coordinates
+    let x_rel = x - CENTER[0]; // x - cx
+    let y_rel = y - CENTER[1]; // y - cy
+
+    // Compute the 3D world coordinates
+    let world_x = (x_rel * depth) / CONSTANT / MM_PER_M;
+    let world_y = (y_rel * depth) / CONSTANT / MM_PER_M;
+    let world_z = depth / MM_PER_M;
+
+    [-world_x, -world_y, world_z]
 }
