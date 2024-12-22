@@ -7,6 +7,7 @@ use opencv::core::{KeyPoint, KeyPointTraitConst, Vector};
 pub const CENTER: [f32; 2] = [320.0, 240.0]; // Image center
 pub const CONSTANT: f32 = 570.3;             // Focal length (in pixels, typically in x and y directions)
 pub const MM_PER_M: f32 = 1000.0;            // Conversion factor (millimeters to meters)
+pub const NO_VALUE: f32 = 0.0;
 
 pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
     // Load the depth and color images
@@ -30,7 +31,7 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
                     // Extract the depth value from the red channel (index 0)
                     let depth_value = depth_buffer.get_pixel(x, y).channels()[0] as f32;
 
-                    if depth_value != 0.0 {
+                    if depth_value != NO_VALUE {
                         positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
             
                         // Get the corresponding color from the color image
@@ -68,7 +69,7 @@ pub fn give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) ->
                 .get_pixel(x, y)
                 .channels()[0] as f32;
 
-            if depth_value != 0.0 {
+            if depth_value != NO_VALUE {
                 positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
             }
         }
