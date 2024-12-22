@@ -6,7 +6,8 @@ use opencv::{
     Result
 };
 
-pub fn extract_features(img1_path: &str, img2_path: &str) -> Result<Vector<KeyPoint>> {
+pub fn extract_features(img1_path: &str, img2_path: &str) -> 
+    Result<(Vector<KeyPoint>, Vector<KeyPoint>, Vector<DMatch>)> {
     let img1 = imread(img1_path, IMREAD_GRAYSCALE)?;
     let img2 = imread(img2_path, IMREAD_GRAYSCALE)?;
     if img1.empty() || img2.empty() {
@@ -76,5 +77,5 @@ pub fn extract_features(img1_path: &str, img2_path: &str) -> Result<Vector<KeyPo
     imwrite(output_path, &matched_image, &opencv::core::Vector::new())?;
     println!("Matched image saved to {}", output_path);
 
-    Ok(keypoints1)
+    Ok((keypoints1, keypoints2, matches))
 }
