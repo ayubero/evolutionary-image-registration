@@ -36,13 +36,20 @@ fn main() {
             sensitivity: 0.00015, // default: 0.00012
             speed: 10.0,          // default: 12.0
         })
-        /*.insert_resource(AmbientLight {
-            color: Color::WHITE,
-            brightness: 500.0,
-        })*/
+        .insert_resource(CameraTransform(Transform { 
+            translation: Vec3::new(0.649504*10.0, 0.394082*10.0, 0.590801*10.0), 
+            rotation: Quat::from_xyzw(0.0610943, -0.324556, 0.149797, 0.931926), 
+            ..Default::default() 
+        }))
+        //.insert_resource(ClearColor(Color::srgb(0.9, 0.9, 0.9)))
         .insert_resource(ExtractedKeypoints((keypoints1, keypoints2, matches)))
         .add_systems(Startup, setup)
-        .add_systems(Update, input_handler)
+        .add_systems(Update, (
+            input_handler, 
+            button_click, 
+            update_object_position, 
+            update_text
+        ))
         .run();
 }
 
@@ -85,10 +92,10 @@ fn setup(
     };
 
     // Spawn reference mesh
-    spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG1_COLOR_PATH, IMG1_DEPTH_PATH, pose1);
+    spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG1_COLOR_PATH, IMG1_DEPTH_PATH, pose1, false);
 
     // Spawn predicted mesh
-    spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG2_COLOR_PATH, IMG2_DEPTH_PATH, pose2);
+    spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG2_COLOR_PATH, IMG2_DEPTH_PATH, pose2, true);
     //spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG4_COLOR_PATH, IMG4_DEPTH_PATH, pose4);
 
     // Spawn keypoints in both images (reference and target)
@@ -96,14 +103,17 @@ fn setup(
     spawn_keypoints(&mut commands, &mut meshes, &mut materials, matches,keypoints1,keypoints2,pose1,pose2);
 
     // Spawn reference camera
-    spawn_pyramid_camera(&mut commands, &mut meshes, &mut materials, pose1);
+    spawn_pyramid_camera(&mut commands, &mut meshes, &mut materials, pose1, false);
 
     // Spawn predicted camera
-    spawn_pyramid_camera(&mut commands, &mut meshes, &mut materials, pose2);
+    spawn_pyramid_camera(&mut commands, &mut meshes, &mut materials, pose2, true);
     //spawn_pyramid_camera(&mut commands, &mut meshes, &mut materials, pose4);
 
     // Display instructions
     spawn_instructions(&mut commands);
+
+    // Display controls
+    spawn_controls(&mut commands);
 
     // Camera
     commands.spawn((
@@ -133,6 +143,51 @@ fn input_handler(
     if keyboard_input.just_pressed(KeyCode::KeyM) {
         for mut visibility in param_set.p1().iter_mut() {
             visibility.toggle_visible_hidden();
+        }
+    }
+}
+
+fn button_click(
+    mut interaction_query: Query<(&Interaction, &AxisButton), Changed<Interaction>>,
+    mut object_position: ResMut<CameraTransform>
+) {
+    for (interaction, axis_button) in interaction_query.iter_mut() {
+        if *interaction == Interaction::Pressed {
+            match axis_button {
+                AxisButton::IncrementX => object_position.0.translation.x += 0.5,
+                AxisButton::DecrementX => object_position.0.translation.x -= 0.5,
+                AxisButton::IncrementY => object_position.0.translation.y += 0.5,
+                AxisButton::DecrementY => object_position.0.translation.y -= 0.5,
+                AxisButton::IncrementZ => object_position.0.translation.z += 0.5,
+                AxisButton::DecrementZ => object_position.0.translation.z -= 0.5,
+            }
+        }
+    }
+}
+
+fn update_object_position(
+    object_position: Res<CameraTransform>,
+    mut query: Query<&mut Transform, With<MovableObject>>,
+) {
+    if object_position.is_changed() {
+        for mut transform in query.iter_mut() {
+            transform.translation = object_position.0.translation;
+        }
+    }
+}
+
+fn update_text(
+    object_position: Res<CameraTransform>,
+    mut query: Query<(&TextLabel, &mut Text)>,
+) {
+    if object_position.is_changed() {
+        for (label, mut text) in query.iter_mut() {
+            let value = match label {
+                TextLabel::X => object_position.0.translation.x,
+                TextLabel::Y => object_position.0.translation.y,
+                TextLabel::Z => object_position.0.translation.z,
+            };
+            **text = format!("{:?}: {:.3}", label, value);
         }
     }
 }

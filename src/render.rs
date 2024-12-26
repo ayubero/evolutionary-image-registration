@@ -71,6 +71,8 @@ pub fn give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) ->
 
             if depth_value != NO_VALUE {
                 positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
+            } else {
+                positions.push([NO_VALUE, NO_VALUE, NO_VALUE]);
             }
         }
     }

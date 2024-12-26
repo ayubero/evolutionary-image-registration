@@ -6,3 +6,7 @@ https://rgbd-dataset.cs.washington.edu/dataset.html
 https://rgbd-dataset.cs.washington.edu/dataset/rgbd-scenes-v2/README.txt
 
 https://bevy-cheatbook.github.io/programming/ecs-intro.html
+
+
+ICP
+https://cs.gmu.edu/~kosecka/cs685/cs685-icp.pdf

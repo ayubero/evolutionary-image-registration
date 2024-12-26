@@ -44,7 +44,7 @@ pub fn extract_features(img1_path: &str, img2_path: &str) ->
     // Sort matches by distance and retain the top 100
     let mut matches_vec: Vec<_> = matches.to_vec();
     matches_vec.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-    let top_matches = &matches_vec[..10]; // Take the top matches
+    let top_matches = &matches_vec[..70]; // Take the top matches
 
     // Convert top matches back to OpenCV VectorOfDMatch
     let mut top_matches_dmatch: Vector<DMatch> = Vector::new();
@@ -53,9 +53,6 @@ pub fn extract_features(img1_path: &str, img2_path: &str) ->
     }
 
     println!("Number of matches: {}", matches.len());
-    /*if let Ok(top_match) = top_matches_dmatch.get(0) {
-        println!("Top Match 1: {:?}", top_match);
-    }*/
 
     // Draw matches on the images
     let mut matched_image = Mat::default();

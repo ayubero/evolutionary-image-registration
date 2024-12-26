@@ -1,10 +1,13 @@
 use std::path::Path;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use rand::Rng;
-use crate::render::{self, CENTER};
+use crate::render::{self, CENTER, NO_VALUE};
 
 #[derive(Resource)]
 pub struct ExtractedKeypoints(pub (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[usize; 2]>));
+
+#[derive(Resource)]
+pub struct CameraTransform(pub Transform);
 
 #[derive(Component)]
 pub struct ToggleKeypoints;
@@ -12,19 +15,41 @@ pub struct ToggleKeypoints;
 #[derive(Component)]
 pub struct ToggleMatches;
 
+#[derive(Component)]
+pub struct MovableObject;
+
+#[derive(Component)]
+pub enum AxisButton {
+    IncrementX,
+    DecrementX,
+    IncrementY,
+    DecrementY,
+    IncrementZ,
+    DecrementZ,
+}
+
+#[derive(Component)]
+#[derive(Debug)]
+pub enum TextLabel {
+    X,
+    Y,
+    Z,
+}
+
 pub fn spawn_mesh<T: AsRef<Path>>(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     color_path: T, 
     depth_path: T,
-    transform: Transform
+    transform: Transform,
+    is_movable: bool
 ) {
     // Get mesh from RGBD image
     let mesh = render::rgbd_to_mesh(color_path, depth_path);
 
     // Spawn the points mesh
-    commands.spawn((
+    let mut entity = commands.spawn((
         Mesh3d(meshes.add(mesh)),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color_texture: None,
@@ -33,6 +58,10 @@ pub fn spawn_mesh<T: AsRef<Path>>(
         })),
         transform
     ));
+
+    if is_movable {
+        entity.insert(MovableObject);
+    }
 }
 
 /// Draws keypoints and their corresponding matches
@@ -62,16 +91,17 @@ pub fn spawn_keypoints(
 
         // Get keypoints coordinates and spawn them
         let query_idx = dmatch[0];
+        let keypoint1 = keypoints1[query_idx];
+
         let train_idx = dmatch[1];
+        let keypoint2 = keypoints2[train_idx];
         
-        // Check array limits
-        if query_idx < keypoints1.len() && train_idx < keypoints2.len() {
+        // Check if keypoint has depth
+        if keypoint1[2] != NO_VALUE && keypoint2[2] != NO_VALUE {
             // Draw points
-            let keypoint1 = keypoints1[query_idx];
             let position1 = transform1.transform_point(Vec3::from_array(keypoint1));
             draw_keypoint(&mut commands, &mut meshes, &mut materials, position1, color);
-
-            let keypoint2 = keypoints2[train_idx];
+            
             let position2 = transform2.transform_point(Vec3::from_array(keypoint2));
             draw_keypoint(&mut commands, &mut meshes, &mut materials, position2, color);
 
@@ -148,7 +178,8 @@ pub fn spawn_pyramid_camera(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    transform: Transform
+    transform: Transform,
+    is_movable: bool
 ) {
     // Pyramid vertices
     const SCALE: f32 = 700.0;
@@ -182,7 +213,7 @@ pub fn spawn_pyramid_camera(
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
     // Spawn pyramid edges
-    commands.spawn((
+    let mut entity = commands.spawn((
         Mesh3d(meshes.add(mesh)),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -192,20 +223,85 @@ pub fn spawn_pyramid_camera(
         })),
         transform
     ));
+
+    if is_movable {
+        entity.insert(MovableObject);
+    }
 }
 
 pub fn spawn_instructions(commands: &mut Commands) {
     commands.spawn((
-        Text::new("Show keypoints (K)\nShow matches (M)\nRun algorithm (R)"),
+        Text::new("I - Show target image\nK - Show keypoints\nM - Show matches\nR - Run algorithm"),
         TextFont {
-            font_size: 12.0,
+            font_size: 16.0,
             ..Default::default()
         },
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(10.0),
-            left: Val::Px(10.0),
+            right: Val::Px(10.0),
             ..default()
         },
+    ));
+}
+
+const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
+
+pub fn spawn_controls(commands: &mut Commands) {
+    spawn_button(commands, "+", 10.0, 50.0, AxisButton::IncrementX);
+    spawn_button(commands, "-", 10.0, 10.0, AxisButton::DecrementX);
+    spawn_text(commands, TextLabel::X, "X: 6.432", 10.0, 90.0);
+    spawn_button(commands, "+", 50.0, 50.0, AxisButton::IncrementY);
+    spawn_button(commands, "-", 50.0, 10.0, AxisButton::DecrementY);
+    spawn_text(commands, TextLabel::Y, "Y: 3.214", 50.0, 90.0);
+    spawn_button(commands, "+", 90.0, 50.0, AxisButton::IncrementZ);
+    spawn_button(commands, "-", 90.0, 10.0, AxisButton::DecrementZ);
+    spawn_text(commands, TextLabel::Z, "Z: 1.532", 90.0, 90.0);
+}
+
+fn spawn_button(commands: &mut Commands, text: &str, top: f32, left: f32, axis_button: AxisButton) {
+    commands.spawn((
+        Button,
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(top),
+            left: Val::Px(left),
+            width: Val::Px(30.0),
+            height: Val::Px(30.0),
+            border: UiRect::all(Val::Px(2.0)),
+            // Horizontally center child text
+            justify_content: JustifyContent::Center,
+            // Vertically center child text
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        BorderColor(Color::BLACK),
+        BorderRadius::MAX,
+        BackgroundColor(NORMAL_BUTTON),
+    ))
+    .insert(axis_button)
+    .with_child((
+        Text::new(text),
+        TextFont {
+            font_size: 16.0,
+            ..Default::default()
+        }
+    ));
+}
+
+fn spawn_text(commands: &mut Commands, label: TextLabel, text: &str, top: f32, left: f32) {
+    commands.spawn((
+        Text::new(text),
+        TextFont {
+            font_size: 16.0,
+            ..Default::default()
+        },
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(top),
+            left: Val::Px(left),
+            ..default()
+        },
+        label
     ));
 }
