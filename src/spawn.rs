@@ -16,24 +16,48 @@ pub struct ToggleKeypoints;
 pub struct ToggleMatches;
 
 #[derive(Component)]
+pub struct ToggleImage;
+
+#[derive(Component)]
 pub struct MovableObject;
 
 #[derive(Component)]
-pub enum AxisButton {
-    IncrementX,
-    DecrementX,
-    IncrementY,
-    DecrementY,
-    IncrementZ,
-    DecrementZ,
+pub struct MovableKeypoint{ pub original_position: Vec3 }
+
+#[derive(Component)]
+pub struct MovableMatch{ 
+    pub original_start: Vec3,
+    pub original_end: Vec3
+}
+
+#[derive(Component)]
+pub enum TransformButton {
+    IncrementTranslationX,
+    DecrementTranslationX,
+    IncrementTranslationY,
+    DecrementTranslationY,
+    IncrementTranslationZ,
+    DecrementTranslationZ,
+    IncrementRotationW,
+    DecrementRotationW,
+    IncrementRotationX,
+    DecrementRotationX,
+    IncrementRotationY,
+    DecrementRotationY,
+    IncrementRotationZ,
+    DecrementRotationZ
 }
 
 #[derive(Component)]
 #[derive(Debug)]
 pub enum TextLabel {
-    X,
-    Y,
-    Z,
+    TranslationX,
+    TranslationY,
+    TranslationZ,
+    RotationW,
+    RotationX,
+    RotationY,
+    RotationZ
 }
 
 pub fn spawn_mesh<T: AsRef<Path>>(
@@ -99,18 +123,20 @@ pub fn spawn_keypoints(
         // Check if keypoint has depth
         if keypoint1[2] != NO_VALUE && keypoint2[2] != NO_VALUE {
             // Draw points
-            let position1 = transform1.transform_point(Vec3::from_array(keypoint1));
-            draw_keypoint(&mut commands, &mut meshes, &mut materials, position1, color);
+            //let position1 = transform1.transform_point(Vec3::from_array(keypoint1));
+            draw_keypoint(&mut commands, &mut meshes, &mut materials, keypoint1.into(), transform1, color, false);
             
-            let position2 = transform2.transform_point(Vec3::from_array(keypoint2));
-            draw_keypoint(&mut commands, &mut meshes, &mut materials, position2, color);
+            //let position2 = transform2.transform_point(Vec3::from_array(keypoint2));
+            draw_keypoint(&mut commands, &mut meshes, &mut materials, keypoint2.into(), transform2, color, true);
 
-            draw_line(
+            draw_match(
                 &mut commands, 
                 &mut meshes, 
                 &mut materials, 
-                position1, 
-                position2, 
+                keypoint1.into(), 
+                keypoint2.into(), 
+                transform1,
+                transform2,
                 color, 
                 0.05
             );
@@ -123,12 +149,16 @@ fn draw_keypoint(
     meshes: &mut ResMut<Assets<Mesh>>, 
     materials: &mut ResMut<Assets<StandardMaterial>>, 
     position: Vec3, 
-    color: Color
+    transform: Transform,
+    color: Color,
+    is_movable: bool
 ) {
     let icosphere_mesh = meshes.add(Sphere::new(0.1).mesh().ico(7).unwrap());
 
+    let transformed_position = transform.transform_point(position);
+
     // Spawn a ball (sphere) at position (x, y, z)
-    commands.spawn((
+    let mut entity = commands.spawn((
         Mesh3d(icosphere_mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: color,
@@ -136,21 +166,29 @@ fn draw_keypoint(
             emissive: color.into(),
             ..default()
         })),
-        Transform::from_xyz(position.x, position.y, position.z),
+        Transform::from_xyz(transformed_position.x, transformed_position.y, transformed_position.z),
         Visibility::Hidden,
         ToggleKeypoints
     ));
+
+    if is_movable {
+        entity.insert(MovableKeypoint{ original_position: position });
+    }
 }
 
-fn draw_line(
+fn draw_match(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    start: Vec3,
-    end: Vec3,
+    position1: Vec3,
+    position2: Vec3,
+    transform1: Transform,
+    transform2: Transform,
     color: Color,
     thickness: f32,
 ) {
+    let start = transform1.transform_point(position1);
+    let end = transform2.transform_point(position2);
     let direction = end - start;
     let length = direction.length();
     let midpoint = start + direction * 0.5;
@@ -170,7 +208,11 @@ fn draw_line(
             ..Default::default()
         },
         Visibility::Hidden,
-        ToggleMatches
+        ToggleMatches,
+        MovableMatch {
+            original_start: start,
+            original_end: position2
+        }
     ));
 }
 
@@ -248,18 +290,30 @@ pub fn spawn_instructions(commands: &mut Commands) {
 const NORMAL_BUTTON: Color = Color::srgb(0.15, 0.15, 0.15);
 
 pub fn spawn_controls(commands: &mut Commands) {
-    spawn_button(commands, "+", 10.0, 50.0, AxisButton::IncrementX);
-    spawn_button(commands, "-", 10.0, 10.0, AxisButton::DecrementX);
-    spawn_text(commands, TextLabel::X, "X: 6.432", 10.0, 90.0);
-    spawn_button(commands, "+", 50.0, 50.0, AxisButton::IncrementY);
-    spawn_button(commands, "-", 50.0, 10.0, AxisButton::DecrementY);
-    spawn_text(commands, TextLabel::Y, "Y: 3.214", 50.0, 90.0);
-    spawn_button(commands, "+", 90.0, 50.0, AxisButton::IncrementZ);
-    spawn_button(commands, "-", 90.0, 10.0, AxisButton::DecrementZ);
-    spawn_text(commands, TextLabel::Z, "Z: 1.532", 90.0, 90.0);
+    spawn_button(commands, "+", 10.0, 50.0, TransformButton::IncrementTranslationX);
+    spawn_button(commands, "-", 10.0, 10.0, TransformButton::DecrementTranslationX);
+    spawn_text(commands, TextLabel::TranslationX, "TranslationX: 6.432", 12.0, 90.0);
+    spawn_button(commands, "+", 50.0, 50.0, TransformButton::IncrementTranslationY);
+    spawn_button(commands, "-", 50.0, 10.0, TransformButton::DecrementTranslationY);
+    spawn_text(commands, TextLabel::TranslationY, "TranslationY: 3.214", 52.0, 90.0);
+    spawn_button(commands, "+", 90.0, 50.0, TransformButton::IncrementTranslationZ);
+    spawn_button(commands, "-", 90.0, 10.0, TransformButton::DecrementTranslationZ);
+    spawn_text(commands, TextLabel::TranslationZ, "TranslationZ: 1.532", 92.0, 90.0);
+    spawn_button(commands, "+", 130.0, 50.0, TransformButton::IncrementRotationW);
+    spawn_button(commands, "-", 130.0, 10.0, TransformButton::DecrementRotationW);
+    spawn_text(commands, TextLabel::RotationW, "RotationW: 1.532", 132.0, 90.0);
+    spawn_button(commands, "+", 170.0, 50.0, TransformButton::IncrementRotationX);
+    spawn_button(commands, "-", 170.0, 10.0, TransformButton::DecrementRotationX);
+    spawn_text(commands, TextLabel::RotationX, "RotationX: 1.532", 172.0, 90.0);
+    spawn_button(commands, "+", 210.0, 50.0, TransformButton::IncrementRotationY);
+    spawn_button(commands, "-", 210.0, 10.0, TransformButton::DecrementRotationY);
+    spawn_text(commands, TextLabel::RotationY, "RotationY: 1.532", 212.0, 90.0);
+    spawn_button(commands, "+", 250.0, 50.0, TransformButton::IncrementRotationZ);
+    spawn_button(commands, "-", 250.0, 10.0, TransformButton::DecrementRotationZ);
+    spawn_text(commands, TextLabel::RotationZ, "RotationZ: 1.532", 252.0, 90.0);
 }
 
-fn spawn_button(commands: &mut Commands, text: &str, top: f32, left: f32, axis_button: AxisButton) {
+fn spawn_button(commands: &mut Commands, text: &str, top: f32, left: f32, axis_button: TransformButton) {
     commands.spawn((
         Button,
         Node {
