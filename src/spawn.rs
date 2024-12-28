@@ -273,7 +273,7 @@ pub fn spawn_pyramid_camera(
 
 pub fn spawn_instructions(commands: &mut Commands) {
     commands.spawn((
-        Text::new("I - Show target image\nK - Show keypoints\nM - Show matches\nR - Run algorithm"),
+        Text::new("I - Show target image\nK - Show keypoints\nM - Show matches\nE - Execute algorithm\nR - Reset"),
         TextFont {
             font_size: 16.0,
             ..Default::default()

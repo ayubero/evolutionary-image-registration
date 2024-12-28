@@ -1,24 +1,16 @@
 use bevy::prelude::*;
 use rand::Rng;
 use std::cmp::Ordering;
-use crate::problem;
 
 #[derive(Clone)]
-struct Element {
-    encoding: Transform,
-    cost: f32,
+pub struct Element {
+    pub encoding: Transform,
+    pub cost: f32,
 }
 
 impl Element {
     fn new(encoding: Transform, cost: f32) -> Self {
         Element { encoding, cost }
-    }
-
-    fn copy(&self) -> Self {
-        Element {
-            encoding: self.encoding.clone(),
-            cost: self.cost,
-        }
     }
 }
 
@@ -44,7 +36,7 @@ fn population_evaluation(prob: &dyn Problem, population: &mut [Element]) {
     }
 }
 
-fn tournament_selection(population: &mut [Element], pop_size: usize) -> usize {
+/*fn tournament_selection(population: &mut [Element], pop_size: usize) -> usize {
     let mut rng = rand::thread_rng();
     let i1 = rng.gen_range(0..pop_size);
     let i2 = rng.gen_range(0..pop_size);
@@ -53,7 +45,7 @@ fn tournament_selection(population: &mut [Element], pop_size: usize) -> usize {
     } else {
         i2
     }
-}
+}*/
 
 fn population_recombination(
     recombination_func: &str,
@@ -65,7 +57,7 @@ fn population_recombination(
     prob.recombine(&population[index_p1].encoding, &population[index_p2].encoding, recombination_func)
 }
 
-fn new_population_truncation(population: &mut [Element], children: Vec<Element>) -> Vec<Element> {
+pub fn new_population_truncation(population: &mut [Element], children: Vec<Element>) -> Vec<Element> {
     let mut joined_population = population.to_vec();
     joined_population.extend(children);
 
@@ -82,7 +74,7 @@ pub trait Problem {
     fn mutate(&self, encoding: Transform, mutation_func: &str) -> Transform;
 }
 
-fn evolution_strategy(
+pub fn evolution_strategy(
     prob: &dyn Problem,
     recombination_func: Option<&str>,
     mutation_func: Option<&str>,
@@ -118,6 +110,11 @@ fn evolution_strategy(
         population_evaluation(prob, &mut children);
         population = new_population_build(&mut population, children);
         it += 1;
+
+        let best_element = population.clone().into_iter().min_by(|a, b| a.cost.partial_cmp(&b.cost).unwrap_or(Ordering::Equal)).unwrap();
+        println!("It: {} | Best element: {:?} {:?} | Error: {}", 
+            it, best_element.encoding.translation, best_element.encoding.rotation, best_element.cost
+        );
     }
 
     population.into_iter().min_by(|a, b| a.cost.partial_cmp(&b.cost).unwrap_or(Ordering::Equal)).unwrap()

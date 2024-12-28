@@ -10,8 +10,8 @@ pub struct PointCloudRegistration {
     matches: Vec<[usize; 2]>
 }
 
-/*impl PointCloudRegistration {
-    fn new(transform1: Transform, keypoints1: Vec<[f32; 3]>, keypoints2: Vec<[f32; 3]>, matches: Vec<[usize; 2]>) -> Self {
+impl PointCloudRegistration {
+    pub fn new(transform1: Transform, keypoints1: Vec<[f32; 3]>, keypoints2: Vec<[f32; 3]>, matches: Vec<[usize; 2]>) -> Self {
         Self {
             transform1: transform1,
             keypoints1: keypoints1,
@@ -19,7 +19,7 @@ pub struct PointCloudRegistration {
             matches: matches
         }
     }
-}*/
+}
 
 impl Problem for PointCloudRegistration {
     fn generate_random_elem(&self, rng: &mut rand::rngs::ThreadRng) -> Transform {
@@ -30,10 +30,10 @@ impl Problem for PointCloudRegistration {
             rng.gen_range(-10.0..10.0)
         );
         let rotation = Quat::from_xyzw(
-            generate_random_angle(rng),
-            generate_random_angle(rng),
-            generate_random_angle(rng),
-            generate_random_angle(rng),
+            gen_rnd_angle(rng),
+            gen_rnd_angle(rng),
+            gen_rnd_angle(rng),
+            gen_rnd_angle(rng),
         ).normalize();
         Transform::from_translation(position).with_rotation(rotation)
     }
@@ -53,8 +53,9 @@ impl Problem for PointCloudRegistration {
                 // Compute the distance between two matched keypoints
                 let position1 = self.transform1.transform_point(Vec3::from_array(keypoint1));
                 let position2 = encoding.transform_point(Vec3::from_array(keypoint2));
-                let distance = position1.distance(position2);
+                let mut distance = position1.distance(position2);
                 error += distance;
+                //println!("Distance {} Match {:?}", distance, dmatch);
             }
         }
         error
@@ -71,14 +72,31 @@ impl Problem for PointCloudRegistration {
     fn mutate(&self, encoding: Transform, _mutation_func: &str) -> Transform {
         // Apply a small random change to the position, rotation
         let mut rng = rand::thread_rng();
-        let position_mutation = Vec3::new(rng.gen_range(-0.5..0.5), rng.gen_range(-0.5..0.5), rng.gen_range(-0.5..0.5));
-        let rotation_mutation = Quat::from_rotation_y(rng.gen_range(-0.1..0.1));
+        const TRANS_RANGE: f32 = 0.0000001;
+        const ROT_RANGE: f32 = 0.000000001;
+        let translation_mutation = Vec3::new(
+            gen_rnd_number(&mut rng, -TRANS_RANGE, TRANS_RANGE), 
+            gen_rnd_number(&mut rng, -TRANS_RANGE, TRANS_RANGE),
+            gen_rnd_number(&mut rng, -TRANS_RANGE, TRANS_RANGE)
+        );
+        let rotation_mutation = Quat::from_xyzw(
+            gen_rnd_number(&mut rng, -ROT_RANGE, ROT_RANGE),
+            gen_rnd_number(&mut rng, -ROT_RANGE, ROT_RANGE),
+            gen_rnd_number(&mut rng, -ROT_RANGE, ROT_RANGE),
+            gen_rnd_number(&mut rng, -ROT_RANGE, ROT_RANGE)
+        );
 
-        encoding.with_translation(encoding.translation + position_mutation)
-                .with_rotation(encoding.rotation * rotation_mutation)
+        let resulting_rotation = (encoding.rotation * rotation_mutation).normalize();
+
+        encoding.with_translation(encoding.translation + translation_mutation)
+                .with_rotation(resulting_rotation)
     }
 }
 
-fn generate_random_angle(rng: &mut rand::rngs::ThreadRng) -> f32 {
+fn gen_rnd_angle(rng: &mut rand::rngs::ThreadRng) -> f32 {
     rng.gen_range(0.0..std::f32::consts::PI)
+}
+
+fn gen_rnd_number(rng: &mut rand::rngs::ThreadRng, min: f32, max: f32) -> f32 {
+    rng.gen_range(min..max)
 }

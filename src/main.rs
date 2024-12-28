@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
+use problem::PointCloudRegistration;
 use spawn::*;
+use evolutionary::*;
 
 mod evolutionary;
 mod orb;
@@ -18,6 +20,10 @@ const IMG4_COLOR_PATH: &str = "assets/00150-color.png";
 const IMG4_DEPTH_PATH: &str = "assets/00150-depth.png";
 const IMG5_COLOR_PATH: &str = "assets/00200-color.png";
 const IMG5_DEPTH_PATH: &str = "assets/00200-depth.png";*/
+
+// Reference pose (from IMG1)
+const POSE1_QUAT: Quat = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0); // Identity quaternion
+const POSE1_TRANSLATION: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 
 fn main() {
     let mut keypoints1: Vec<[f32; 3]> = Vec::new();
@@ -66,12 +72,10 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     keypoints: Res<ExtractedKeypoints>
 ) {
-    // Reference pose (from IMG1)
-    let pose1_quat = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0); // Identity quaternion
-    let pose1_translation = Vec3::new(0.0, 0.0, 0.0);
-    let pose1 = Transform {
-        rotation: pose1_quat,
-        translation: pose1_translation,
+    // Reference pose
+    let pose1: Transform = Transform {
+        rotation: POSE1_QUAT,
+        translation: POSE1_TRANSLATION,
         ..Default::default()
     };
 
@@ -133,6 +137,8 @@ fn setup(
 // System to receive input from the user
 fn input_handler(
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    keypoints: Res<ExtractedKeypoints>,
+    object_position: ResMut<CameraTransform>,
     mut param_set: ParamSet<(
         Query<&mut Visibility, With<ToggleImage>>,
         Query<&mut Visibility, With<ToggleKeypoints>>,
@@ -158,6 +164,12 @@ fn input_handler(
         for mut visibility in param_set.p2().iter_mut() {
             visibility.toggle_visible_hidden();
         }
+    }
+
+    // Execute algorithm
+    if keyboard_input.just_pressed(KeyCode::KeyE) {
+        println!("Running algorithm!");
+        run_evolution_algorithm(keypoints, object_position);
     }
 }
 
@@ -252,4 +264,39 @@ fn update_text(
             **text = format!("{:?}: {:.3}", label, value);
         }
     }
+}
+
+fn run_evolution_algorithm(
+    keypoints: Res<ExtractedKeypoints>,
+    mut object_position: ResMut<CameraTransform>
+) {
+    // Problem input data
+    let transform1 = Transform{ 
+        rotation: POSE1_QUAT, 
+        translation: POSE1_TRANSLATION,
+        ..Default::default()
+    };
+    let (keypoints1, keypoints2, matches) = &keypoints.0;
+
+    // Define problem
+    let problem = PointCloudRegistration::new(
+        transform1, 
+        keypoints1.to_vec(), 
+        keypoints2.to_vec(), 
+        matches.to_vec()
+    );
+
+    // Run the evolution strategy
+    let best_element = evolution_strategy(
+        &problem,
+        Some("convex_recombination"),
+        Some("simple_mutation"),
+        5000, // Population size
+        100, // Max iterations
+        new_population_truncation
+    );
+
+    // Update the Transform
+    object_position.0.translation = best_element.encoding.translation;
+    object_position.0.rotation = best_element.encoding.rotation;
 }
