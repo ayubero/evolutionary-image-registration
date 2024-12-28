@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 use rand::Rng;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use std::cmp::Ordering;
+
+use crate::problem::Problem;
 
 #[derive(Clone)]
 pub struct Element {
@@ -20,7 +23,7 @@ impl std::fmt::Debug for Element {
     }
 }
 
-fn population_initialization(prob: &dyn Problem, pop_size: usize) -> Vec<Element> {
+fn population_initialization(prob: &Problem, pop_size: usize) -> Vec<Element> {
     let mut rng = rand::thread_rng();
     (0..pop_size)
         .map(|_| {
@@ -30,10 +33,10 @@ fn population_initialization(prob: &dyn Problem, pop_size: usize) -> Vec<Element
         .collect()
 }
 
-fn population_evaluation(prob: &dyn Problem, population: &mut [Element]) {
-    for el in population.iter_mut() {
+fn population_evaluation(prob: &Problem, population: &mut [Element]) {
+    population.par_iter_mut().for_each(|el| {
         el.cost = prob.eval(&el.encoding);
-    }
+    });
 }
 
 /*fn tournament_selection(population: &mut [Element], pop_size: usize) -> usize {
@@ -49,7 +52,7 @@ fn population_evaluation(prob: &dyn Problem, population: &mut [Element]) {
 
 fn population_recombination(
     recombination_func: &str,
-    prob: &dyn Problem,
+    prob: &Problem,
     population: &[Element],
     index_p1: usize,
     index_p2: usize,
@@ -67,23 +70,23 @@ pub fn new_population_truncation(population: &mut [Element], children: Vec<Eleme
     joined_population
 }
 
-pub trait Problem {
+/*pub trait Problem {
     fn generate_random_elem(&self, rng: &mut rand::rngs::ThreadRng) -> Transform;
     fn eval(&self, encoding: &Transform) -> f32;
     fn recombine(&self, parent1: &Transform, parent2: &Transform, recombination_func: &str) -> Transform;
     fn mutate(&self, encoding: Transform, mutation_func: &str) -> Transform;
-}
+}*/
 
 pub fn evolution_strategy(
-    prob: &dyn Problem,
+    prob: Problem,
     recombination_func: Option<&str>,
     mutation_func: Option<&str>,
     pop_size: usize,
     max_iter: usize,
     new_population_build: fn(&mut [Element], Vec<Element>) -> Vec<Element>,
 ) -> Element {
-    let mut population = population_initialization(prob, pop_size);
-    population_evaluation(prob, &mut population);
+    let mut population = population_initialization(&prob, pop_size);
+    population_evaluation(&prob, &mut population);
 
     let mut it = 0;
     while it < max_iter {
@@ -95,7 +98,7 @@ pub fn evolution_strategy(
             let i1 = rng.gen_range(0..pop_size);
             let i2 = rng.gen_range(0..pop_size);
             if let Some(recomb_func) = recombination_func {
-                let c = population_recombination(recomb_func, prob, &population, i1, i2);
+                let c = population_recombination(recomb_func, &prob, &population, i1, i2);
                 children.push(Element::new(c, 0.0));
             }
         }
@@ -107,7 +110,7 @@ pub fn evolution_strategy(
             }
         }
 
-        population_evaluation(prob, &mut children);
+        population_evaluation(&prob, &mut children);
         population = new_population_build(&mut population, children);
         it += 1;
 

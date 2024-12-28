@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
-use problem::PointCloudRegistration;
+use problem::Problem;
 use spawn::*;
 use evolutionary::*;
 
@@ -279,7 +279,7 @@ fn run_evolution_algorithm(
     let (keypoints1, keypoints2, matches) = &keypoints.0;
 
     // Define problem
-    let problem = PointCloudRegistration::new(
+    let problem = Problem::new(
         transform1, 
         keypoints1.to_vec(), 
         keypoints2.to_vec(), 
@@ -288,7 +288,7 @@ fn run_evolution_algorithm(
 
     // Run the evolution strategy
     let best_element = evolution_strategy(
-        &problem,
+        problem,
         Some("convex_recombination"),
         Some("simple_mutation"),
         5000, // Population size
