@@ -84,7 +84,7 @@ pub fn spawn_mesh<T: AsRef<Path>>(
     ));
 
     if is_movable {
-        entity.insert(MovableObject);
+        entity.insert((Visibility::Hidden, MovableObject, ToggleImage));
     }
 }
 
@@ -267,7 +267,7 @@ pub fn spawn_pyramid_camera(
     ));
 
     if is_movable {
-        entity.insert(MovableObject);
+        entity.insert((Visibility::Hidden, MovableObject, ToggleImage));
     }
 }
 

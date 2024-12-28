@@ -2,9 +2,11 @@ use bevy::prelude::*;
 use bevy_flycam::prelude::*;
 use spawn::*;
 
+mod evolutionary;
 mod orb;
 mod render;
 mod spawn;
+mod problem;
 
 const IMG1_COLOR_PATH: &str = "assets/00000-color.png";
 const IMG1_DEPTH_PATH: &str = "assets/00000-depth.png";
