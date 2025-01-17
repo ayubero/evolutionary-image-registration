@@ -12,10 +12,10 @@ pub struct Problem {
 impl Problem {
     pub fn new(transform1: Transform, keypoints1: Vec<[f32; 3]>, keypoints2: Vec<[f32; 3]>, matches: Vec<[usize; 2]>) -> Self {
         Self {
-            transform1: transform1,
-            keypoints1: keypoints1,
-            keypoints2: keypoints2,
-            matches: matches
+            transform1,
+            keypoints1,
+            keypoints2,
+            matches
         }
     }
 }

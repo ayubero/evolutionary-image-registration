@@ -16,4 +16,4 @@ More details about the chosen scenes: https://rgbd-dataset.cs.washington.edu/dat
 
 ![App Screenshot](assets/screenshot.png)
 
-The screenshot shows two images of the same scene taken from different positions. The colorful dots indicate the keypoints found, and the lines connecting them represent the matches between keypoints.
+The screenshot shows the successful alignment of two point clouds. The colorful dots and lines indicate the correspondences and their distance (error).

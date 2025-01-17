@@ -2,6 +2,8 @@ use std::path::Path;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use image::{DynamicImage, Pixel};
 use opencv::core::{KeyPoint, KeyPointTraitConst, Vector};
+/*use rand::seq::SliceRandom;
+use rand::thread_rng;*/
 
 // Camera intrinsics (these values should come from your camera calibration; but were obtained from the dataset)
 pub const CENTER: [f32; 2] = [320.0, 240.0]; // Image center
@@ -9,7 +11,7 @@ pub const CONSTANT: f32 = 570.3;             // Focal length (in pixels, typical
 pub const MM_PER_M: f32 = 1000.0;            // Conversion factor (millimeters to meters)
 pub const NO_VALUE: f32 = 0.0;
 
-pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
+pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> (Vec<[f32; 3]>, Mesh) {
     // Load the depth and color images
     let color_image = image::open(color_path).expect("Failed to load color image");
     let depth_image = image::open(depth_path).expect("Failed to load depth image");
@@ -21,6 +23,7 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
     );
 
     let mut positions = Vec::new();
+    let mut filtered_positions = Vec::new();
     let mut colors = Vec::new();
 
     if let DynamicImage::ImageRgb8(color_buffer) = color_image {
@@ -32,7 +35,12 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
                     let depth_value = depth_buffer.get_pixel(x, y).channels()[0] as f32;
 
                     if depth_value != NO_VALUE {
-                        positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
+                        let coordinates = compute_world_coordinates(x as f32, y as f32, depth_value);
+                        positions.push(coordinates);
+
+                        if x % 30 == 0 && y % 30 == 0  { // Filter some points
+                            filtered_positions.push(coordinates)
+                        }
             
                         // Get the corresponding color from the color image
                         let color = color_buffer.get_pixel(x, y);
@@ -52,10 +60,14 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> Mesh {
         panic!("Expected an 8-bit RGB image!");
     }
 
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    //positions = uniform_random_sample_positions(&positions, 1000);
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
 
-    mesh
+    println!("Mesh with {} points", positions.len());
+
+    (filtered_positions, mesh)
 }
 
 pub fn give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) -> Vec<[f32; 3]> {

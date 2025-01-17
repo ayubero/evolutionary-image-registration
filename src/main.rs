@@ -1,14 +1,20 @@
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
-use problem::Problem;
+use config::{POSE1, POSE2};
+use nalgebra::Point3;
+use rand::Rng;
+//use problem::Problem;
 use spawn::*;
-use evolutionary::*;
+//use evolutionary::*;
+use icp::*;
 
 mod evolutionary;
 mod orb;
 mod render;
 mod spawn;
 mod problem;
+mod icp;
+mod config;
 
 const IMG1_COLOR_PATH: &str = "assets/00000-color.png";
 const IMG1_DEPTH_PATH: &str = "assets/00000-depth.png";
@@ -20,10 +26,6 @@ const IMG4_COLOR_PATH: &str = "assets/00150-color.png";
 const IMG4_DEPTH_PATH: &str = "assets/00150-depth.png";
 const IMG5_COLOR_PATH: &str = "assets/00200-color.png";
 const IMG5_DEPTH_PATH: &str = "assets/00200-depth.png";*/
-
-// Reference pose (from IMG1)
-const POSE1_QUAT: Quat = Quat::from_xyzw(0.0, 0.0, 0.0, 1.0); // Identity quaternion
-const POSE1_TRANSLATION: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 
 fn main() {
     let mut keypoints1: Vec<[f32; 3]> = Vec::new();
@@ -48,13 +50,14 @@ fn main() {
             sensitivity: 0.00015, // default: 0.00012
             speed: 10.0,          // default: 12.0
         })
-        .insert_resource(CameraTransform(Transform { 
+        .insert_resource(CameraTransform(/*Transform { 
             translation: Vec3::new(0.649504*10.0, 0.394082*10.0, 0.590801*10.0), 
             rotation: Quat::from_xyzw(0.0610943, -0.324556, 0.149797, 0.931926), 
             ..Default::default() 
-        }))
+        }*/POSE2))
         //.insert_resource(ClearColor(Color::srgb(0.9, 0.9, 0.9)))
         .insert_resource(ExtractedKeypoints((keypoints1, keypoints2, matches)))
+        .insert_resource(PointClouds{ source: Vec::new(), target: Vec::new() })
         .add_systems(Startup, setup)
         .add_systems(Update, (
             input_handler, 
@@ -70,42 +73,20 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut point_clouds: ResMut<PointClouds>,
     keypoints: Res<ExtractedKeypoints>
 ) {
     // Reference pose
-    let pose1: Transform = Transform {
-        rotation: POSE1_QUAT,
-        translation: POSE1_TRANSLATION,
-        ..Default::default()
-    };
+    let pose1: Transform = POSE1;
 
-    // True IMG2 pose
-    /*// (x: -qX, y: -qY, z: qZ, w: qW)
-    let pose2_quat = Quat::from_xyzw(0.0059421, -0.0373319, 0.0209614, 0.999065);
-    // (x: -worldX, y: -worldY, z: worldZ)
-    let pose2_translation = Vec3::new(0.067494*10.0, 0.058187*10.0, 0.0369303*10.0);
-    let pose2 = Transform {
-        rotation: pose2_quat,
-        translation: pose2_translation,
-        ..Default::default()
-    };*/
-    
-    // Initial IMG2 pose (It's actually the IMG5 pose)
-    // (x: -qX, y: -qY, z: qZ, w: qW)
-    let pose2_quat = Quat::from_xyzw(0.0610943, -0.324556, 0.149797, 0.931926);
-    // (x: -worldX, y: -worldY, z: worldZ)
-    let pose2_translation = Vec3::new(0.649504*10.0, 0.394082*10.0, 0.590801*10.0);
-    let pose2 = Transform {
-        rotation: pose2_quat,
-        translation: pose2_translation,
-        ..Default::default()
-    };
+    // Initial IMG2 pose
+    let pose2 = POSE2;
 
     // Spawn reference mesh
-    spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG1_COLOR_PATH, IMG1_DEPTH_PATH, pose1, false);
+    spawn_mesh(&mut commands, &mut meshes, &mut materials, &mut point_clouds, IMG1_COLOR_PATH, IMG1_DEPTH_PATH, pose1, false);
 
     // Spawn predicted mesh
-    spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG2_COLOR_PATH, IMG2_DEPTH_PATH, pose2, true);
+    spawn_mesh(&mut commands, &mut meshes, &mut materials, &mut point_clouds, IMG2_COLOR_PATH, IMG2_DEPTH_PATH, pose2, true);
     //spawn_mesh(&mut commands, &mut meshes, &mut materials, IMG4_COLOR_PATH, IMG4_DEPTH_PATH, pose4);
 
     // Spawn keypoints in both images (reference and target)
@@ -125,6 +106,8 @@ fn setup(
     // Display controls
     spawn_controls(&mut commands);
 
+    draw_correspondences(&mut commands, &mut meshes, &mut materials, point_clouds.into());
+
     // Camera
     commands.spawn((
         Camera3d::default(),
@@ -138,6 +121,7 @@ fn setup(
 fn input_handler(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     keypoints: Res<ExtractedKeypoints>,
+    point_clouds: Res<PointClouds>,
     object_position: ResMut<CameraTransform>,
     mut param_set: ParamSet<(
         Query<&mut Visibility, With<ToggleImage>>,
@@ -169,7 +153,7 @@ fn input_handler(
     // Execute algorithm
     if keyboard_input.just_pressed(KeyCode::KeyE) {
         println!("Running algorithm!");
-        run_evolution_algorithm(keypoints, object_position);
+        run_evolution_algorithm(keypoints, point_clouds, object_position);
     }
 }
 
@@ -266,11 +250,113 @@ fn update_text(
     }
 }
 
+fn draw_correspondences(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    point_clouds: Res<PointClouds>
+) {
+    let source = &point_clouds.source;
+    let target = convert_vec(&point_clouds.target);
+    let transformed_source = source.clone().into_iter().map(
+        |src| {
+            let src_point = Vec3 { x: src[0], y: src[1], z: src[2] };
+            let transformed_src = POSE2.transform_point(src_point);
+            let transformed_point = Point3::from([
+                transformed_src.x, transformed_src.y, transformed_src.z
+            ]);
+            transformed_point
+        }
+    ).collect();
+    let correspondences = find_correspondences(
+        &transformed_source, &target
+    );
+    let mut i = 0;
+    for (source, target) in correspondences {
+        //if i < 1 {
+            //println!("Correspondences drawn");
+            let position1 = Vec3::new(source.x, source.y, source.z);
+            let position2 = Vec3::new(target.x, target.y, target.z);
+            //println!("Position1: {:?}", position1);
+            //println!("Position2: {:?}", position2);
+            let mut rng = rand::thread_rng();
+            let color = Color::hsv(
+                rng.gen_range(0.0..360.0),
+                1.0,
+                1.0,
+            );
+            let start = position1;
+            let end = position2;
+            let direction = end - start;
+            let length = direction.length();
+            let midpoint = start + direction * 0.5;
+            let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
+            commands.spawn((
+                Mesh3d(meshes.add(Cylinder::new(0.05 / 2.0, length))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    alpha_mode: AlphaMode::Opaque,
+                    emissive: color.into(),
+                    ..default()
+                })),
+                Transform {
+                    translation: midpoint,
+                    rotation,
+                    ..Default::default()
+                }
+            ));
+            let icosphere_mesh = meshes.add(Sphere::new(0.1).mesh().ico(7).unwrap());
+            commands.spawn((
+                Mesh3d(icosphere_mesh.clone()),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    alpha_mode: AlphaMode::Opaque,
+                    emissive: color.into(),
+                    ..default()
+                })),
+                Transform::from_xyz(position1.x, position1.y, position1.z)
+            ));
+            commands.spawn((
+                Mesh3d(icosphere_mesh.clone()),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    alpha_mode: AlphaMode::Opaque,
+                    emissive: color.into(),
+                    ..default()
+                })),
+                Transform::from_xyz(position2.x, position2.y, position2.z)
+            ));
+        /*} else {
+            break;
+        }*/
+        i += 1;
+    }
+}
+
 fn run_evolution_algorithm(
     keypoints: Res<ExtractedKeypoints>,
+    point_clouds: Res<PointClouds>,
     mut object_position: ResMut<CameraTransform>
 ) {
-    // Problem input data
+    let source_points = &point_clouds.source;
+    let target_points = &point_clouds.target;
+
+    let icp_result = iterative_closest_point(&source_points, &target_points, 10, 50.0);
+    match icp_result {
+        Ok(transform) => {
+            println!("ICP succeeded!");
+            println!("Translation: {:?}", transform.translation);
+            println!("Rotation: {:?}", transform.rotation);
+
+            // Update the Transform
+            object_position.0.translation = transform.translation;
+            object_position.0.rotation = transform.rotation;
+        }
+        Err(err) => {
+            eprintln!("ICP failed: {}", err);
+        }
+    }
+    /*// Problem input data
     let transform1 = Transform{ 
         rotation: POSE1_QUAT, 
         translation: POSE1_TRANSLATION,
@@ -298,5 +384,5 @@ fn run_evolution_algorithm(
 
     // Update the Transform
     object_position.0.translation = best_element.encoding.translation;
-    object_position.0.rotation = best_element.encoding.rotation;
+    object_position.0.rotation = best_element.encoding.rotation;*/
 }

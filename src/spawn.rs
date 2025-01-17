@@ -7,6 +7,12 @@ use crate::render::{self, CENTER, NO_VALUE};
 pub struct ExtractedKeypoints(pub (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[usize; 2]>));
 
 #[derive(Resource)]
+pub struct PointClouds {
+    pub source: Vec<[f32; 3]>,
+    pub target: Vec<[f32; 3]>,
+}
+
+#[derive(Resource)]
 pub struct CameraTransform(pub Transform);
 
 #[derive(Component)]
@@ -64,13 +70,14 @@ pub fn spawn_mesh<T: AsRef<Path>>(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    point_clouds: &mut ResMut<PointClouds>,
     color_path: T, 
     depth_path: T,
     transform: Transform,
     is_movable: bool
 ) {
     // Get mesh from RGBD image
-    let mesh = render::rgbd_to_mesh(color_path, depth_path);
+    let (positions, mesh) = render::rgbd_to_mesh(color_path, depth_path);
 
     // Spawn the points mesh
     let mut entity = commands.spawn((
@@ -85,6 +92,12 @@ pub fn spawn_mesh<T: AsRef<Path>>(
 
     if is_movable {
         entity.insert((Visibility::Hidden, MovableObject, ToggleImage));
+
+        // Source points to transform
+        point_clouds.source = positions;
+    } else {
+        // Reference point cloud
+        point_clouds.target = positions;
     }
 }
 
