@@ -14,6 +14,6 @@ More details about the chosen scenes: https://rgbd-dataset.cs.washington.edu/dat
 
 ## Showcase
 
-![App Screenshot](assets/screenshot.png)
+![App Screenshot](assets/screenshot1.png)
 
 The screenshot shows the successful alignment of two point clouds. The colorful dots and lines indicate the correspondences and their distance (error).
