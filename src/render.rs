@@ -70,7 +70,7 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> (Vec<[f32; 
     (filtered_positions, mesh)
 }
 
-pub fn give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) -> Vec<[f32; 3]> {
+pub fn _give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) -> Vec<[f32; 3]> {
     let mut positions: Vec<[f32; 3]> = Vec::new();
     let depth_image = image::open(depth_path).expect("Failed to load depth image");
     if let DynamicImage::ImageLuma16(depth_buffer) = depth_image {

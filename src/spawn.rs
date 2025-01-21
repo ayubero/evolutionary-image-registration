@@ -1,10 +1,10 @@
 use std::path::Path;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
+use nalgebra::Point3;
 use rand::Rng;
-use crate::render::{self, CENTER, NO_VALUE};
 
-#[derive(Resource)]
-pub struct ExtractedKeypoints(pub (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[usize; 2]>));
+use crate::{render::{self, CENTER}, utils::{self, compute_residual_error}};
+use utils::{convert_vec, find_correspondences};
 
 #[derive(Resource)]
 pub struct PointClouds {
@@ -16,10 +16,7 @@ pub struct PointClouds {
 pub struct CameraTransform(pub Transform);
 
 #[derive(Component)]
-pub struct ToggleKeypoints;
-
-#[derive(Component)]
-pub struct ToggleMatches;
+pub struct ToggleCorrespondence;
 
 #[derive(Component)]
 pub struct ToggleImage;
@@ -28,13 +25,7 @@ pub struct ToggleImage;
 pub struct MovableObject;
 
 #[derive(Component)]
-pub struct MovableKeypoint{ pub original_position: Vec3 }
-
-#[derive(Component)]
-pub struct MovableMatch{ 
-    pub original_start: Vec3,
-    pub original_end: Vec3
-}
+pub struct RemovableCorrespondence;
 
 #[derive(Component)]
 pub enum TransformButton {
@@ -101,132 +92,102 @@ pub fn spawn_mesh<T: AsRef<Path>>(
     }
 }
 
-/// Draws keypoints and their corresponding matches
-/// 
-/// * matches: Matches from the first image to the second one, which means that keypoints1[i]
-/// has a corresponding point in keypoints2[matches[i]]
-pub fn spawn_keypoints(
-    mut commands: &mut Commands,
-    mut meshes: &mut ResMut<Assets<Mesh>>,
-    mut materials: &mut ResMut<Assets<StandardMaterial>>,
-    matches: &Vec<[usize; 2]>,
-    keypoints1: &Vec<[f32; 3]>,
-    keypoints2: &Vec<[f32; 3]>,
-    transform1: Transform,
-    transform2: Transform
-) {
-    // Spawn all keypoints that match
-    for dmatch in matches.iter() {
-        let mut rng = rand::thread_rng();
-    
-        // Generate a random color
-        let color = Color::hsv(
-            rng.gen_range(0.0..360.0),
-            1.0,
-            1.0,
-        );
-
-        // Get keypoints coordinates and spawn them
-        let query_idx = dmatch[0];
-        let keypoint1 = keypoints1[query_idx];
-
-        let train_idx = dmatch[1];
-        let keypoint2 = keypoints2[train_idx];
-        
-        // Check if keypoint has depth
-        if keypoint1[2] != NO_VALUE && keypoint2[2] != NO_VALUE {
-            // Draw points
-            //let position1 = transform1.transform_point(Vec3::from_array(keypoint1));
-            draw_keypoint(&mut commands, &mut meshes, &mut materials, keypoint1.into(), transform1, color, false);
-            
-            //let position2 = transform2.transform_point(Vec3::from_array(keypoint2));
-            draw_keypoint(&mut commands, &mut meshes, &mut materials, keypoint2.into(), transform2, color, true);
-
-            draw_match(
-                &mut commands, 
-                &mut meshes, 
-                &mut materials, 
-                keypoint1.into(), 
-                keypoint2.into(), 
-                transform1,
-                transform2,
-                color, 
-                0.05
-            );
-        }
-    }
-}
-
-fn draw_keypoint(
-    commands: &mut Commands, 
-    meshes: &mut ResMut<Assets<Mesh>>, 
-    materials: &mut ResMut<Assets<StandardMaterial>>, 
-    position: Vec3, 
-    transform: Transform,
-    color: Color,
-    is_movable: bool
-) {
-    let icosphere_mesh = meshes.add(Sphere::new(0.1).mesh().ico(7).unwrap());
-
-    let transformed_position = transform.transform_point(position);
-
-    // Spawn a ball (sphere) at position (x, y, z)
-    let mut entity = commands.spawn((
-        Mesh3d(icosphere_mesh.clone()),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: color,
-            alpha_mode: AlphaMode::Opaque,
-            emissive: color.into(),
-            ..default()
-        })),
-        Transform::from_xyz(transformed_position.x, transformed_position.y, transformed_position.z),
-        Visibility::Hidden,
-        ToggleKeypoints
-    ));
-
-    if is_movable {
-        entity.insert(MovableKeypoint{ original_position: position });
-    }
-}
-
-fn draw_match(
+/// Draws correspondences
+pub fn spawn_correspondences(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    position1: Vec3,
-    position2: Vec3,
-    transform1: Transform,
-    transform2: Transform,
-    color: Color,
-    thickness: f32,
+    point_clouds: Res<PointClouds>,
+    camera_transform: Res<CameraTransform>,
+    visibility: Visibility
 ) {
-    let start = transform1.transform_point(position1);
-    let end = transform2.transform_point(position2);
-    let direction = end - start;
-    let length = direction.length();
-    let midpoint = start + direction * 0.5;
-    let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
-
-    commands.spawn((
-        Mesh3d(meshes.add(Cylinder::new(thickness / 2.0, length))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: color,
-            alpha_mode: AlphaMode::Opaque,
-            emissive: color.into(),
-            ..default()
-        })),
-        Transform {
-            translation: midpoint,
-            rotation,
-            ..Default::default()
-        },
-        Visibility::Hidden,
-        ToggleMatches,
-        MovableMatch {
-            original_start: start,
-            original_end: position2
+    let source = &point_clouds.source;
+    let target = convert_vec(&point_clouds.target);
+    let transformed_source = source.clone().into_iter().map(
+        |src| {
+            let src_point = Vec3 { x: src[0], y: src[1], z: src[2] };
+            let transformed_src = camera_transform.0.transform_point(src_point);
+            let transformed_point = Point3::from([
+                transformed_src.x, transformed_src.y, transformed_src.z
+            ]);
+            transformed_point
         }
-    ));
+    ).collect();
+    let correspondences = find_correspondences(
+        &transformed_source, &target
+    );
+    let residual_error = compute_residual_error(&correspondences);
+    println!("Residual error: {}", residual_error);
+    //let mut i = 0;
+    for (source, target) in correspondences {
+        //if i < 1 {
+            //println!("Correspondences drawn");
+            let position1 = Vec3::new(source.x, source.y, source.z);
+            let position2 = Vec3::new(target.x, target.y, target.z);
+            //println!("Position1: {:?}", position1);
+            //println!("Position2: {:?}", position2);
+            let mut rng = rand::thread_rng();
+            let color = Color::hsv(
+                rng.gen_range(0.0..360.0),
+                1.0,
+                1.0,
+            );
+            let start = position1;
+            let end = position2;
+            let direction = end - start;
+            let length = direction.length();
+            let midpoint = start + direction * 0.5;
+            let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
+            commands.spawn((
+                Mesh3d(meshes.add(Cylinder::new(0.05 / 2.0, length))),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    alpha_mode: AlphaMode::Opaque,
+                    emissive: color.into(),
+                    ..default()
+                })),
+                Transform {
+                    translation: midpoint,
+                    rotation,
+                    ..Default::default()
+                },
+                visibility,
+                ToggleCorrespondence,
+                RemovableCorrespondence
+            ));
+            let icosphere_mesh = meshes.add(Sphere::new(0.1).mesh().ico(7).unwrap());
+            // Movable source point
+            commands.spawn((
+                Mesh3d(icosphere_mesh.clone()),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    alpha_mode: AlphaMode::Opaque,
+                    emissive: color.into(),
+                    ..default()
+                })),
+                Transform::from_xyz(position1.x, position1.y, position1.z),
+                visibility,
+                ToggleCorrespondence,
+                RemovableCorrespondence
+            ));
+            // Reference points, they don't move
+            commands.spawn((
+                Mesh3d(icosphere_mesh.clone()),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    alpha_mode: AlphaMode::Opaque,
+                    emissive: color.into(),
+                    ..default()
+                })),
+                Transform::from_xyz(position2.x, position2.y, position2.z),
+                visibility,
+                ToggleCorrespondence
+            ));
+        /*} else {
+            break;
+        }*/
+        //i += 1;
+    }
 }
 
 pub fn spawn_pyramid_camera(
@@ -286,7 +247,7 @@ pub fn spawn_pyramid_camera(
 
 pub fn spawn_instructions(commands: &mut Commands) {
     commands.spawn((
-        Text::new("I - Show target image\nK - Show keypoints\nM - Show matches\nE - Execute algorithm\nR - Reset"),
+        Text::new("I - Show target image\nC - Show correspondences\nE - Execute algorithm\nR - Reset"),
         TextFont {
             font_size: 16.0,
             ..Default::default()
