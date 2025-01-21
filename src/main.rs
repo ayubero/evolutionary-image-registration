@@ -2,14 +2,14 @@ use std::mem;
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
 use config::{POSE1, POSE2};
-//use ga::genetic_algorithm;
+use ga::genetic_algorithm;
 //use problem::Problem;
 use spawn::*;
 //use evolutionary::*;
 use icp::*;
 
 mod evolutionary;
-//mod ga;
+mod ga;
 mod orb;
 mod render;
 mod spawn;
@@ -212,10 +212,21 @@ fn run_evolution_algorithm(
     let source_points = &point_clouds.source;
     let target_points = &point_clouds.target;
 
-    let icp_result = iterative_closest_point(&source_points, &target_points, 15, 0.1);
-    match icp_result {
+    // ICP
+    //let result = iterative_closest_point(&source_points, &target_points, 15, 0.5);
+
+    // GA
+    let result = genetic_algorithm(
+        &source_points, 
+        &target_points, 
+        100, 
+        30, 
+        0.5, 
+        0.5
+    );
+    match result {
         Ok(transform) => {
-            println!("ICP succeeded!");
+            println!("Algorithm succeeded!");
             println!("Translation: {:?}", transform.translation);
             println!("Rotation: {:?}", transform.rotation);
 
@@ -224,10 +235,10 @@ fn run_evolution_algorithm(
             object_position.0.rotation = transform.rotation;
         }
         Err(err) => {
-            eprintln!("ICP failed: {}", err);
+            eprintln!("Algorithm failed: {}", err);
         }
     }
-    //genetic_algorithm(&source_points, &target_points, 10, 20, 0.5, 10.0);
+
     /*// Problem input data
     let transform1 = Transform{ 
         rotation: POSE1_QUAT, 
