@@ -247,7 +247,7 @@ pub fn spawn_pyramid_camera(
 
 pub fn spawn_instructions(commands: &mut Commands) {
     commands.spawn((
-        Text::new("I - Show target image\nC - Show correspondences\nE - Execute algorithm\nR - Reset"),
+        Text::new("I - Show target image\nC - Show correspondences\nV - Show correct pose\nE - Execute algorithm\nR - Reset"),
         TextFont {
             font_size: 16.0,
             ..Default::default()

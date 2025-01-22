@@ -1,7 +1,7 @@
 use std::mem;
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
-use config::{POSE1, POSE2};
+use config::{CORRECT_POSE2, POSE1, POSE2};
 use ga::genetic_algorithm;
 //use problem::Problem;
 use spawn::*;
@@ -97,7 +97,7 @@ fn setup(
 fn input_handler(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     point_clouds: Res<PointClouds>,
-    object_position: ResMut<CameraTransform>,
+    mut object_position: ResMut<CameraTransform>,
     mut param_set: ParamSet<(
         Query<&mut Visibility, With<ToggleImage>>,
         Query<&mut Visibility, With<ToggleCorrespondence>>
@@ -119,8 +119,17 @@ fn input_handler(
 
     // Execute algorithm
     if keyboard_input.just_pressed(KeyCode::KeyE) {
-        println!("Running algorithm!");
-        run_evolution_algorithm(point_clouds, object_position);
+        run_algorithm(point_clouds, &mut object_position);
+    }
+
+    // Reset position
+    if keyboard_input.just_pressed(KeyCode::KeyR) {
+        object_position.0 = POSE2;
+    }
+
+    // Show true position (V for Verity)
+    if keyboard_input.just_pressed(KeyCode::KeyV) {
+        object_position.0 = CORRECT_POSE2;
     }
 }
 
@@ -205,15 +214,22 @@ fn update_text(
     }
 }
 
-fn run_evolution_algorithm(
+fn run_algorithm(
     point_clouds: Res<PointClouds>,
-    mut object_position: ResMut<CameraTransform>
+    object_position: &mut ResMut<CameraTransform>
 ) {
+    println!("Running algorithm!");
+
     let source_points = &point_clouds.source;
     let target_points = &point_clouds.target;
 
     // ICP
-    //let result = iterative_closest_point(&source_points, &target_points, 15, 0.5);
+    /*let result = iterative_closest_point(
+        &source_points, 
+        &target_points, 
+        15, 
+        0.5
+    );*/
 
     // GA
     let result = genetic_algorithm(

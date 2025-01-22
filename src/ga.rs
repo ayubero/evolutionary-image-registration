@@ -58,7 +58,7 @@ pub fn genetic_algorithm(
     let mut best_transform = None;
     let mut best_fitness = f32::INFINITY;
 
-    for _ in 0..generations {
+    for g in 0..generations {
         // Evaluate fitness
         let mut fitness_scores: Vec<(f32, &Transform)> = population
             .iter()
@@ -71,6 +71,7 @@ pub fn genetic_algorithm(
         if fitness_scores[0].0 < best_fitness {
             best_fitness = fitness_scores[0].0;
             best_transform = Some(*fitness_scores[0].1);
+            println!("Generation {} | Lowest error: {}", g, best_fitness);
         }
 
         // Check for convergence
@@ -78,7 +79,7 @@ pub fn genetic_algorithm(
             break;
         }
 
-        // Selection (e.g., top 50% of the population)
+        // Selection
         let selected: Vec<Transform> = fitness_scores
             .iter()
             .take(population_size / 2)
