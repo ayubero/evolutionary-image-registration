@@ -2,24 +2,16 @@ use std::mem;
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
 use config::{CORRECT_POSE2, POSE1, POSE2};
-use icp::iterative_closest_point;
-use ga::genetic_algorithm;
-use es::evolution_strategies;
-use pso::particle_swarm_optimization;
-use de::differential_evolution;
-//use problem::Problem;
 use spawn::*;
-//use evolutionary::*;
+use solvers::icp::iterative_closest_point;
+use solvers::ga::genetic_algorithm;
+use solvers::es::evolution_strategy;
+use solvers::pso::particle_swarm_optimization;
+use solvers::de::differential_evolution;
 
-mod evolutionary;
+mod solvers;
 mod render;
 mod spawn;
-mod problem;
-mod icp;
-mod ga;
-mod es;
-mod pso;
-mod de;
 mod utils;
 mod config;
 
@@ -253,7 +245,7 @@ fn run_algorithm(
             0.5, 
             0.5
         ),
-        Solver::ES => evolution_strategies(
+        Solver::ES => evolution_strategy(
             &source_points,
             &target_points,
             50,

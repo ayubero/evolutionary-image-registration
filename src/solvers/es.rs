@@ -2,12 +2,12 @@ use rand::prelude::*;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::Transform;
 
-pub fn evolution_strategies(
+pub fn evolution_strategy(
     source: &Vec<[f32; 3]>,
     target: &Vec<[f32; 3]>,
     population_size: usize,
     generations: usize,
-    learning_rate: f32,
+    _learning_rate: f32,
     convergence_threshold: f32
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
