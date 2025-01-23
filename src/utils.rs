@@ -51,3 +51,27 @@ pub fn compute_residual_error(correspondences: &Vec<(Point3<f32>, Point3<f32>)>)
         .sum::<f32>() / correspondences.len() as f32;
     residual_error
 }
+
+/*
+use kiddo::KdTree;
+use bevy::math::Vec3;
+
+// Fitness function: Calculate the sum of the closest point distances using a k-d tree
+fn fitness_with_kdtree(
+    transform: &Transform,
+    source_points: &Vec<Vec3>,
+    target_kdtree: &KdTree<f32, 3>,
+) -> f32 {
+    source_points
+        .iter()
+        .map(|p| {
+            let transformed_point = transform.rotation * *p + transform.translation;
+            let nearest_distance = target_kdtree
+                .nearest(&[transformed_point.x, transformed_point.y, transformed_point.z], 1, &squared_euclidean)
+                .map(|nearest| nearest.0) // Extract the distance
+                .unwrap_or(f32::INFINITY);
+            nearest_distance.sqrt() // Convert squared distance to actual distance
+        })
+        .sum()
+}
+*/

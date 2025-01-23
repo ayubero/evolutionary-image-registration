@@ -1,14 +1,14 @@
 use bevy::prelude::Transform;
 
 pub fn particle_swarm_optimization(
-  source: &Vec<[f32; 3]>,
-  target: &Vec<[f32; 3]>,
-  population_size: usize,
-  iterations: usize,
-  inertia_weight: f32,
-  cognitive_weight: f32,
-  social_weight: f32,
-  convergence_threshold: f32,
+    source: &Vec<[f32; 3]>,
+    target: &Vec<[f32; 3]>,
+    population_size: usize,
+    iterations: usize,
+    inertia_weight: f32,
+    cognitive_weight: f32,
+    social_weight: f32,
+    convergence_threshold: f32
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
         return Err("Source or target point cloud is empty.".to_string());

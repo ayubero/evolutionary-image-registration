@@ -4,20 +4,22 @@ use bevy_flycam::prelude::*;
 use config::{CORRECT_POSE2, POSE1, POSE2};
 use icp::iterative_closest_point;
 use ga::genetic_algorithm;
+use es::evolution_strategies;
 use pso::particle_swarm_optimization;
+use de::differential_evolution;
 //use problem::Problem;
 use spawn::*;
 //use evolutionary::*;
 
-
 mod evolutionary;
-mod ga;
-mod orb;
 mod render;
 mod spawn;
 mod problem;
 mod icp;
+mod ga;
+mod es;
 mod pso;
+mod de;
 mod utils;
 mod config;
 
@@ -217,6 +219,14 @@ fn update_text(
     }
 }
 
+enum Solver {
+    ICP,
+    GA,
+    ES,
+    PSO,
+    DE
+}
+
 fn run_algorithm(
     point_clouds: Res<PointClouds>,
     object_position: &mut ResMut<CameraTransform>
@@ -226,35 +236,51 @@ fn run_algorithm(
     let source_points = &point_clouds.source;
     let target_points = &point_clouds.target;
 
-    // ICP
-    /*let result = iterative_closest_point(
-        &source_points, 
-        &target_points, 
-        15, 
-        0.5
-    );*/
+    let solver = Solver::ES;
 
-    // GA
-    /*let result = genetic_algorithm(
-        &source_points, 
-        &target_points, 
-        100, 
-        30, 
-        0.5, 
-        0.5
-    );*/
-
-    // PSO
-    let result = particle_swarm_optimization(
-        &source_points,
-        &target_points,
-        100,
-        100,
-        0.7,
-        1.5,
-        1.5,
-        0.01,
-    );
+    let result = match solver {
+        Solver::ICP => iterative_closest_point(
+            &source_points, 
+            &target_points, 
+            50, 
+            0.5
+        ),
+        Solver::GA => genetic_algorithm(
+            &source_points, 
+            &target_points, 
+            100, 
+            30, 
+            0.5, 
+            0.5
+        ),
+        Solver::ES => evolution_strategies(
+            &source_points,
+            &target_points,
+            50,
+            100,
+            0.1,
+            0.5,
+        ),
+        Solver::PSO => particle_swarm_optimization(
+            &source_points,
+            &target_points,
+            100,
+            100,
+            0.7,
+            1.5,
+            1.5,
+            0.5,
+        ),
+        Solver::DE => differential_evolution(
+            &source_points,
+            &target_points,
+            50,
+            100,
+            0.7,
+            0.8,
+            0.5
+        )
+    };
 
     match result {
         Ok(transform) => {
@@ -270,34 +296,4 @@ fn run_algorithm(
             eprintln!("Algorithm failed: {}", err);
         }
     }
-
-    /*// Problem input data
-    let transform1 = Transform{ 
-        rotation: POSE1_QUAT, 
-        translation: POSE1_TRANSLATION,
-        ..Default::default()
-    };
-    let (keypoints1, keypoints2, matches) = &keypoints.0;
-
-    // Define problem
-    let problem = Problem::new(
-        transform1, 
-        keypoints1.to_vec(), 
-        keypoints2.to_vec(), 
-        matches.to_vec()
-    );
-
-    // Run the evolution strategy
-    let best_element = evolution_strategy(
-        problem,
-        Some("convex_recombination"),
-        Some("simple_mutation"),
-        5000, // Population size
-        100, // Max iterations
-        new_population_truncation
-    );
-
-    // Update the Transform
-    object_position.0.translation = best_element.encoding.translation;
-    object_position.0.rotation = best_element.encoding.rotation;*/
 }

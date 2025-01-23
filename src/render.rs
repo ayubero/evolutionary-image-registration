@@ -1,7 +1,6 @@
 use std::path::Path;
 use bevy::{asset::RenderAssetUsages, prelude::*, render::mesh::PrimitiveTopology};
 use image::{DynamicImage, Pixel};
-use opencv::core::{KeyPoint, KeyPointTraitConst, Vector};
 /*use rand::seq::SliceRandom;
 use rand::thread_rng;*/
 
@@ -68,27 +67,6 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> (Vec<[f32; 
     println!("Mesh with {} points", positions.len());
 
     (filtered_positions, mesh)
-}
-
-pub fn _give_depth<T: AsRef<Path>>(keypoints: Vector<KeyPoint>, depth_path: T) -> Vec<[f32; 3]> {
-    let mut positions: Vec<[f32; 3]> = Vec::new();
-    let depth_image = image::open(depth_path).expect("Failed to load depth image");
-    if let DynamicImage::ImageLuma16(depth_buffer) = depth_image {
-        for keypoint in keypoints.iter() {
-            let x = keypoint.pt().x as u32;
-            let y = keypoint.pt().y as u32;
-            let depth_value = depth_buffer
-                .get_pixel(x, y)
-                .channels()[0] as f32;
-
-            if depth_value != NO_VALUE {
-                positions.push(compute_world_coordinates(x as f32, y as f32, depth_value));
-            } else {
-                positions.push([NO_VALUE, NO_VALUE, NO_VALUE]);
-            }
-        }
-    }
-    positions
 }
 
 fn compute_world_coordinates(x: f32, y: f32, depth: f32) -> [f32; 3] {
