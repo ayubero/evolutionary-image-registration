@@ -2,11 +2,13 @@ use std::mem;
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
 use config::{CORRECT_POSE2, POSE1, POSE2};
+use icp::iterative_closest_point;
 use ga::genetic_algorithm;
+use pso::particle_swarm_optimization;
 //use problem::Problem;
 use spawn::*;
 //use evolutionary::*;
-use icp::*;
+
 
 mod evolutionary;
 mod ga;
@@ -15,6 +17,7 @@ mod render;
 mod spawn;
 mod problem;
 mod icp;
+mod pso;
 mod utils;
 mod config;
 
@@ -232,14 +235,27 @@ fn run_algorithm(
     );*/
 
     // GA
-    let result = genetic_algorithm(
+    /*let result = genetic_algorithm(
         &source_points, 
         &target_points, 
         100, 
         30, 
         0.5, 
         0.5
+    );*/
+
+    // PSO
+    let result = particle_swarm_optimization(
+        &source_points,
+        &target_points,
+        100,
+        100,
+        0.7,
+        1.5,
+        1.5,
+        0.01,
     );
+
     match result {
         Ok(transform) => {
             println!("Algorithm succeeded!");

@@ -1,6 +1,6 @@
 # Evolutionary Image Registration for 3D Modeling
 
-The aim of this project is to align point clouds extracted from RGB-D images, minimizing the error by using evolution strategies (a subgroup of evolutionary algorithms).
+The aim of this project is to align 3D point clouds extracted from RGB-D images, minimizing the error by using evolution strategies (a subgroup of evolutionary algorithms).
 
 ## Dataset
 
