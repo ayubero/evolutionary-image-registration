@@ -19,6 +19,13 @@ pub const POSE2: Transform = Transform {
     translation: Vec3::new(0.649504*10.0, 0.394082*10.0, 0.590801*10.0),
     scale: Vec3::new(1.0, 1.0, 1.0)
 };
+
+// Initial POSE2 (Harder starting pose for ICP)
+/*pub const POSE2: Transform = Transform {
+    rotation: Quat::from_xyzw(-0.995, -0.031, 0.015, 0.090),
+    translation: Vec3::new(-0.1005*10.0, 0.4441*10.0, 0.6408*10.0),
+    scale: Vec3::new(1.0, 1.0, 1.0)
+};*/
 /*pub const POSE2: Transform = Transform {
     rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
     translation: Vec3::new(0.0, 0.0, 0.0),

@@ -1,8 +1,9 @@
 use rand::prelude::*;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::Transform;
+use rayon::prelude::*;
 
-//use crate::utils::{compute_residual_error, convert_vec, find_correspondences};
+use crate::utils::fitness;
 
 pub fn genetic_algorithm(
     source: &Vec<[f32; 3]>,
@@ -11,29 +12,18 @@ pub fn genetic_algorithm(
     generations: usize,
     mutation_rate: f32,
     convergence_threshold: f32,
+    verbose: bool
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
         return Err("Source or target point cloud is empty.".to_string());
     }
 
-    // Define fitness function
-    fn fitness(transform: &Transform, source_points: &Vec<Vec3>, target_points: &Vec<Vec3>) -> f32 {
-        source_points
-            .iter()
-            .map(|p| {
-                let transformed_point = transform.rotation * *p + transform.translation;
-                target_points
-                    .iter()
-                    .map(|t| transformed_point.distance(*t))
-                    .fold(f32::INFINITY, f32::min)
-            })
-            .sum()
-    }
-
     // Initialize population
     let mut rng = thread_rng();
     let mut population: Vec<Transform> = (0..population_size)
+        .into_par_iter()
         .map(|_| {
+            let mut rng = rand::thread_rng();
             Transform {
                 translation: Vec3::new(
                     rng.gen_range(-5.0..5.0),
@@ -71,7 +61,7 @@ pub fn genetic_algorithm(
         if fitness_scores[0].0 < best_fitness {
             best_fitness = fitness_scores[0].0;
             best_transform = Some(*fitness_scores[0].1);
-            println!("Generation {} | Lowest error: {}", g, best_fitness);
+            if verbose { println!("Generation {} | Best fitness: {}", g, best_fitness); }
         }
 
         // Check for convergence
@@ -106,7 +96,8 @@ pub fn genetic_algorithm(
         }
 
         // Mutation (randomly perturb new population)
-        for individual in &mut new_population {
+        new_population.par_iter_mut().for_each(|individual| {
+            let mut rng = thread_rng();
             if rng.gen::<f32>() < mutation_rate {
                 individual.translation += Vec3::new(
                     rng.gen_range(-0.1..0.1),
@@ -120,7 +111,7 @@ pub fn genetic_algorithm(
                     rng.gen_range(-0.1..0.1),
                 );
             }
-        }
+        });
 
         population = new_population;
     }

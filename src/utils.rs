@@ -1,4 +1,5 @@
 use kiddo::{KdTree, SquaredEuclidean};
+use bevy::{math::Vec3, prelude::Transform};
 use nalgebra::Point3;
 
 // Compute squared distance between two points
@@ -52,26 +53,33 @@ pub fn compute_residual_error(correspondences: &Vec<(Point3<f32>, Point3<f32>)>)
     residual_error
 }
 
-/*
-use kiddo::KdTree;
-use bevy::math::Vec3;
-
-// Fitness function: Calculate the sum of the closest point distances using a k-d tree
-fn fitness_with_kdtree(
-    transform: &Transform,
-    source_points: &Vec<Vec3>,
-    target_kdtree: &KdTree<f32, 3>,
-) -> f32 {
-    source_points
+// Fitness function: Sum of closest point distances
+pub fn fitness(transform: &Transform, source_points: &Vec<Vec3>, target_points: &Vec<Vec3>) -> f32 {
+    /*source_points
         .iter()
         .map(|p| {
             let transformed_point = transform.rotation * *p + transform.translation;
-            let nearest_distance = target_kdtree
-                .nearest(&[transformed_point.x, transformed_point.y, transformed_point.z], 1, &squared_euclidean)
-                .map(|nearest| nearest.0) // Extract the distance
-                .unwrap_or(f32::INFINITY);
-            nearest_distance.sqrt() // Convert squared distance to actual distance
+            target_points
+                .iter()
+                .map(|t| transformed_point.distance(*t))
+                .fold(f32::INFINITY, f32::min)
         })
-        .sum()
+        .sum::<f32>() / target_points.len() as f32*/
+    let target = target_points.into_iter().map(
+        |t| Point3::from([t.x, t.y, t.z])
+    ).collect();
+    let transformed_source = source_points.into_iter().map(
+        |src| {
+            let src_point = Vec3 { x: src[0], y: src[1], z: src[2] };
+            let transformed_src = transform.transform_point(src_point);
+            let transformed_point = Point3::from([
+                transformed_src.x, transformed_src.y, transformed_src.z
+            ]);
+            transformed_point
+        }
+    ).collect();
+    let correspondences = find_correspondences(
+        &transformed_source, &target
+    );
+    compute_residual_error(&correspondences)
 }
-*/

@@ -1,13 +1,22 @@
 use std::mem;
+use std::time::Instant;
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
+use lazy::dsl::col;
+use lazy::frame::IntoLazy;
+use polars::frame::DataFrame;
+use polars::prelude::NamedFrom;
+use polars::*;
+
 use config::{CORRECT_POSE2, POSE1, POSE2};
+use series::Series;
 use spawn::*;
 use solvers::icp::iterative_closest_point;
 use solvers::ga::genetic_algorithm;
 use solvers::es::evolution_strategy;
 use solvers::pso::particle_swarm_optimization;
 use solvers::de::differential_evolution;
+use utils::fitness;
 
 mod solvers;
 mod render;
@@ -211,6 +220,7 @@ fn update_text(
     }
 }
 
+#[derive(Debug)]
 enum Solver {
     ICP,
     GA,
@@ -219,60 +229,34 @@ enum Solver {
     DE
 }
 
+impl Solver {
+    fn to_str(&self) -> &str {
+        match self {
+            Solver::ICP => "ICP",
+            Solver::GA => "GA",
+            Solver::ES => "ES",
+            Solver::PSO => "PSO",
+            Solver::DE => "DE"
+        }
+    }
+}
+
 fn run_algorithm(
     point_clouds: Res<PointClouds>,
     object_position: &mut ResMut<CameraTransform>
 ) {
-    println!("Running algorithm!");
-
     let source_points = &point_clouds.source;
     let target_points = &point_clouds.target;
 
-    let solver = Solver::ES;
+    let source: Vec<Vec3> = source_points.iter().map(|&p| Vec3::from(p)).collect();
+    let target: Vec<Vec3> = target_points.iter().map(|&p| Vec3::from(p)).collect();
 
-    let result = match solver {
-        Solver::ICP => iterative_closest_point(
-            &source_points, 
-            &target_points, 
-            50, 
-            0.5
-        ),
-        Solver::GA => genetic_algorithm(
-            &source_points, 
-            &target_points, 
-            100, 
-            30, 
-            0.5, 
-            0.5
-        ),
-        Solver::ES => evolution_strategy(
-            &source_points,
-            &target_points,
-            50,
-            100,
-            0.1,
-            0.5,
-        ),
-        Solver::PSO => particle_swarm_optimization(
-            &source_points,
-            &target_points,
-            100,
-            100,
-            0.7,
-            1.5,
-            1.5,
-            0.5,
-        ),
-        Solver::DE => differential_evolution(
-            &source_points,
-            &target_points,
-            50,
-            100,
-            0.7,
-            0.8,
-            0.5
-        )
-    };
+    /*println!("Running algorithm!");
+
+    // Change to try other algorithms
+    let solver = Solver::ICP;
+
+    let result = solve(source_points, target_points, &solver, true);
 
     match result {
         Ok(transform) => {
@@ -287,5 +271,150 @@ fn run_algorithm(
         Err(err) => {
             eprintln!("Algorithm failed: {}", err);
         }
+    }*/
+
+    // Try all algorithms
+    println!("Running all algorithms");
+    let mut best_transform = Transform::default();
+    let mut best_score = f32::INFINITY;
+    let variants = [Solver::ICP, Solver::GA, Solver::ES, Solver::PSO, Solver::DE];
+    let num_repeats = 2;
+
+    // Collect results
+    let mut results = Vec::new();
+
+    for r in 0..num_repeats {
+        println!("Repetition: {}", r);
+        for solver in variants.iter() {
+            // Solve problem and get duration
+            let start = Instant::now();
+            let result = solve(source_points, target_points, solver, false);
+            let duration = start.elapsed();
+
+            match result {
+                Ok(transform) => {
+                    // Compute error
+                    let error = fitness(&transform, &source, &target);
+                    println!("Solver: {:<3} | Residual error: {:<11} | Time: {:?}", 
+                        solver.to_str(), error, duration
+                    );
+
+                    // Get best transform
+                    if error < best_score {
+                        best_transform = transform;
+                        best_score = error;
+                    }
+
+                    // Save results
+                    results.push((
+                        solver.to_str().to_string(),
+                        error,
+                        duration.as_secs_f64(),
+                    ));
+                }
+                Err(err) => {
+                    eprintln!(
+                        "Solver: {:<3} | Algorithm failed: {}",
+                        solver.to_str(),
+                        err
+                    );
+                }
+            }
+        }
     }
+
+    // Convert results into Series
+    let solver_series = Series::new(
+        "Solver".into(),
+        results.iter().map(|(solver, _, _)| solver.as_str()).collect::<Vec<_>>(),
+    );
+    let error_series = Series::new(
+        "Residual Error".into(),
+        results.iter().map(|(_, error, _)| *error).collect::<Vec<_>>(),
+    );
+    let time_series = Series::new(
+        "Time Taken (s)".into(),
+        results.iter().map(|(_, _, time)| *time).collect::<Vec<_>>(),
+    );
+
+    // Create DataFrame
+    let df = DataFrame::new(vec![
+        solver_series.into(), 
+        error_series.into(), 
+        time_series.into()
+    ]).unwrap();
+    //println!("{}", df);
+
+    // Group by Solver and calculate averages
+    let lazy_df = df.lazy();
+    let agg_df = lazy_df
+        .group_by([col("Solver")])
+        .agg([
+            col("Residual Error").mean().alias("Mean Residual Error"),
+            col("Time Taken (s)").mean().alias("Mean Time Taken (s)"),
+        ])
+        .sort(["Mean Residual Error"], Default::default())
+        .collect()
+        .unwrap();
+
+    // Display the aggregated results
+    println!("{}", agg_df);
+    
+    // Update the Transform
+    object_position.0.translation = best_transform.translation;
+    object_position.0.rotation = best_transform.rotation;
+
+}
+
+fn solve(source_points: &Vec<[f32; 3]>, target_points: &Vec<[f32; 3]>, solver: &Solver, verbose: bool) 
+-> Result<Transform, String> {
+    let result = match solver {
+        Solver::ICP => iterative_closest_point(
+            &source_points, 
+            &target_points, 
+            100, 
+            0.5,
+            verbose
+        ),
+        Solver::GA => genetic_algorithm(
+            &source_points, 
+            &target_points, 
+            100, 
+            50, 
+            0.5, 
+            0.5,
+            verbose
+        ),
+        Solver::ES => evolution_strategy(
+            &source_points,
+            &target_points,
+            100,
+            100,
+            0.1,
+            0.5,
+            verbose
+        ),
+        Solver::PSO => particle_swarm_optimization(
+            &source_points,
+            &target_points,
+            50,
+            100,
+            0.7,
+            1.5,
+            1.5,
+            0.5,
+            verbose
+        ),
+        Solver::DE => differential_evolution(
+            &source_points,
+            &target_points,
+            50,
+            100,
+            0.7,
+            0.8,
+            0.5,
+            verbose
+        )
+    };
+    result
 }

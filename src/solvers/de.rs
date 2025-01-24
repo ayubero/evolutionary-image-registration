@@ -1,6 +1,9 @@
 use rand::prelude::*;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::Transform;
+use rayon::prelude::*;
+
+use crate::utils::fitness;
 
 pub fn differential_evolution(
     source: &Vec<[f32; 3]>,
@@ -9,24 +12,11 @@ pub fn differential_evolution(
     generations: usize,
     crossover_probability: f32,
     differential_weight: f32,
-    convergence_threshold: f32
+    convergence_threshold: f32,
+    verbose: bool
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
         return Err("Source or target point cloud is empty.".to_string());
-    }
-
-    // Fitness function: Calculate the sum of the closest point distances
-    fn fitness(transform: &Transform, source_points: &Vec<Vec3>, target_points: &Vec<Vec3>) -> f32 {
-        source_points
-            .iter()
-            .map(|p| {
-                let transformed_point = transform.rotation * *p + transform.translation;
-                target_points
-                    .iter()
-                    .map(|t| transformed_point.distance(*t))
-                    .fold(f32::INFINITY, f32::min)
-            })
-            .sum()
     }
 
     let mut rng = thread_rng();
@@ -43,7 +33,9 @@ pub fn differential_evolution(
 
     // Initialize the population
     let mut population: Vec<Individual> = (0..population_size)
+        .into_par_iter()
         .map(|_| {
+            let mut rng = rand::thread_rng();
             let transform = Transform {
                 translation: Vec3::new(
                     rng.gen_range(-1.0..1.0),
@@ -69,7 +61,7 @@ pub fn differential_evolution(
         .collect();
 
     // Perform Differential Evolution
-    for _ in 0..generations {
+    for g in 0..generations {
         for i in 0..population_size {
             // Select three random, distinct individuals (not including `i`)
             let mut indices: Vec<usize> = (0..population_size).filter(|&idx| idx != i).collect();
@@ -148,6 +140,8 @@ pub fn differential_evolution(
 
         // Check for convergence
         let best_fitness = population.iter().map(|ind| ind.fitness).fold(f32::INFINITY, f32::min);
+        if verbose { println!("Generation {} | Best fitness: {}", g, best_fitness); }
+
         if best_fitness < convergence_threshold {
             break;
         }

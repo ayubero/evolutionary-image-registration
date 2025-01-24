@@ -1,4 +1,9 @@
+use rayon::prelude::*;
+use rand::{thread_rng, Rng};
+use bevy::math::{Quat, Vec3};
 use bevy::prelude::Transform;
+
+use crate::utils::fitness;
 
 pub fn particle_swarm_optimization(
     source: &Vec<[f32; 3]>,
@@ -8,28 +13,11 @@ pub fn particle_swarm_optimization(
     inertia_weight: f32,
     cognitive_weight: f32,
     social_weight: f32,
-    convergence_threshold: f32
+    convergence_threshold: f32,
+    verbose: bool,
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
         return Err("Source or target point cloud is empty.".to_string());
-    }
-
-    use rand::prelude::*;
-    use bevy::math::{Quat, Vec3};
-    use bevy::prelude::Transform;
-
-    // Fitness function: Calculate the sum of the closest point distances
-    fn fitness(transform: &Transform, source_points: &Vec<Vec3>, target_points: &Vec<Vec3>) -> f32 {
-        source_points
-            .iter()
-            .map(|p| {
-                let transformed_point = transform.rotation * *p + transform.translation;
-                target_points
-                    .iter()
-                    .map(|t| transformed_point.distance(*t))
-                    .fold(f32::INFINITY, f32::min)
-            })
-            .sum()
     }
 
     let mut rng = thread_rng();
@@ -81,21 +69,37 @@ pub fn particle_swarm_optimization(
     let mut global_best_position = Transform::default();
     let mut global_best_fitness = f32::INFINITY;
 
-    for _ in 0..iterations {
-        for particle in &mut particles {
-            // Evaluate fitness
-            let current_fitness = fitness(&particle.position, &source_points, &target_points);
+    for i in 0..iterations {
+        // Evaluate particles in parallel
+        particles
+            .par_iter_mut()
+            .for_each(|particle| {
+                // Evaluate fitness
+                let current_fitness = fitness(&particle.position, &source_points, &target_points);
 
-            // Update personal best
-            if current_fitness < particle.best_fitness {
-                particle.best_fitness = current_fitness;
-                particle.best_position = particle.position;
-            }
+                // Update personal best
+                if current_fitness < particle.best_fitness {
+                    particle.best_fitness = current_fitness;
+                    particle.best_position = particle.position;
+                }
+            });
 
-            // Update global best
-            if current_fitness < global_best_fitness {
-                global_best_fitness = current_fitness;
-                global_best_position = particle.position;
+        // Find the global best particle (reduce operation)
+        let (local_best_position, local_best_fitness) = particles
+            .par_iter()
+            .map(|particle| (particle.best_position, particle.best_fitness))
+            .reduce(
+                || (Transform::default(), f32::INFINITY),
+                |acc, next| if next.1 < acc.1 { next } else { acc },
+            );
+
+        // Update global best if a better fitness is found
+        if local_best_fitness < global_best_fitness {
+            global_best_fitness = local_best_fitness;
+            global_best_position = local_best_position;
+
+            if verbose && i != 0 {
+                println!("Iteration {} | Best fitness: {}", i, global_best_fitness);
             }
         }
 
@@ -104,47 +108,51 @@ pub fn particle_swarm_optimization(
             break;
         }
 
-        // Update velocity and position
-        for particle in &mut particles {
-            let inertia = particle.velocity.translation * inertia_weight;
+        // Update velocity and position in parallel
+        particles
+            .par_iter_mut()
+            .for_each(|particle| {
+                let mut thread_rng = thread_rng();
 
-            let cognitive = (particle.best_position.translation - particle.position.translation)
-                * cognitive_weight
-                * rng.gen::<f32>();
+                let inertia = particle.velocity.translation * inertia_weight;
 
-            let social = (global_best_position.translation - particle.position.translation)
-                * social_weight
-                * rng.gen::<f32>();
+                let cognitive = (particle.best_position.translation - particle.position.translation)
+                    * cognitive_weight
+                    * thread_rng.gen::<f32>();
 
-            particle.velocity.translation = inertia + cognitive + social;
+                let social = (global_best_position.translation - particle.position.translation)
+                    * social_weight
+                    * thread_rng.gen::<f32>();
 
-            particle.position.translation += particle.velocity.translation;
+                particle.velocity.translation = inertia + cognitive + social;
 
-            // Update rotation using SLERP for smoothness
-            let rotation_inertia = particle.velocity.rotation.slerp(Quat::IDENTITY, inertia_weight);
+                particle.position.translation += particle.velocity.translation;
 
-            let rotation_cognitive = Quat::from_euler(
-                bevy::math::EulerRot::XYZ,
-                rng.gen::<f32>() * cognitive_weight,
-                rng.gen::<f32>() * cognitive_weight,
-                rng.gen::<f32>() * cognitive_weight,
-            );
+                // Update rotation using SLERP for smoothness
+                let rotation_inertia = particle.velocity.rotation.slerp(Quat::IDENTITY, inertia_weight);
 
-            let rotation_social = Quat::from_euler(
-                bevy::math::EulerRot::XYZ,
-                rng.gen::<f32>() * social_weight,
-                rng.gen::<f32>() * social_weight,
-                rng.gen::<f32>() * social_weight,
-            );
+                let rotation_cognitive = Quat::from_euler(
+                    bevy::math::EulerRot::XYZ,
+                    thread_rng.gen::<f32>() * cognitive_weight,
+                    thread_rng.gen::<f32>() * cognitive_weight,
+                    thread_rng.gen::<f32>() * cognitive_weight,
+                );
 
-            particle.velocity.rotation = rotation_inertia * rotation_cognitive * rotation_social;
+                let rotation_social = Quat::from_euler(
+                    bevy::math::EulerRot::XYZ,
+                    thread_rng.gen::<f32>() * social_weight,
+                    thread_rng.gen::<f32>() * social_weight,
+                    thread_rng.gen::<f32>() * social_weight,
+                );
 
-            particle.position.rotation *= particle.velocity.rotation;
-        }
+                particle.velocity.rotation = rotation_inertia * rotation_cognitive * rotation_social;
+
+                particle.position.rotation *= particle.velocity.rotation;
+            });
     }
 
     // Return the best global transformation
-    if global_best_fitness < convergence_threshold {
+    if global_best_fitness < f32::INFINITY {
         Ok(global_best_position)
     } else {
         Err("PSO failed to converge to a solution.".to_string())

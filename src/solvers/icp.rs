@@ -8,6 +8,7 @@ pub fn iterative_closest_point(
     target: &Vec<[f32; 3]>,
     max_iterations: usize,
     convergence_threshold: f32,
+    verbose: bool
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
         return Err("Source or target point cloud is empty.".to_string());
@@ -86,7 +87,7 @@ pub fn iterative_closest_point(
             .sum::<f32>()
             / source_points.len() as f32;
 
-        println!("Iteration {} | Mean error {}", i, mean_error);
+        if verbose { println!("Iteration {} | Mean error {}", i, mean_error); }
 
         if mean_error < convergence_threshold {
             break;

@@ -1,6 +1,9 @@
 use rand::prelude::*;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::Transform;
+use rayon::prelude::*;
+
+use crate::utils::fitness;
 
 pub fn evolution_strategy(
     source: &Vec<[f32; 3]>,
@@ -8,29 +11,14 @@ pub fn evolution_strategy(
     population_size: usize,
     generations: usize,
     _learning_rate: f32,
-    convergence_threshold: f32
+    convergence_threshold: f32,
+    verbose: bool
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
         return Err("Source or target point cloud is empty.".to_string());
     }
 
-    // Fitness function: Sum of closest point distances
-    fn fitness(transform: &Transform, source_points: &Vec<Vec3>, target_points: &Vec<Vec3>) -> f32 {
-        source_points
-            .iter()
-            .map(|p| {
-                let transformed_point = transform.rotation * *p + transform.translation;
-                target_points
-                    .iter()
-                    .map(|t| transformed_point.distance(*t))
-                    .fold(f32::INFINITY, f32::min)
-            })
-            .sum()
-    }
-
-    let mut rng = thread_rng();
-
-    // Preprocess points into `Vec3`
+    // Preprocess points into Vec3
     let source_points: Vec<Vec3> = source.iter().map(|&p| Vec3::from(p)).collect();
     let target_points: Vec<Vec3> = target.iter().map(|&p| Vec3::from(p)).collect();
 
@@ -42,7 +30,9 @@ pub fn evolution_strategy(
 
     // Initialize the population with random transforms
     let mut population: Vec<Individual> = (0..population_size)
+        .into_par_iter()
         .map(|_| {
+            let mut rng = rand::thread_rng(); // Thread-local RNG for safe random number generation
             let transform = Transform {
                 translation: Vec3::new(
                     rng.gen_range(-1.0..1.0),
@@ -68,7 +58,7 @@ pub fn evolution_strategy(
         .collect();
 
     // Evolution loop
-    for _ in 0..generations {
+    for g in 0..generations {
         // Compute the mean and standard deviation of the population
         let mean_translation: Vec3 = population
             .iter()
@@ -99,7 +89,9 @@ pub fn evolution_strategy(
 
         // Mutation: Add Gaussian noise to each individual
         let mutated_population: Vec<Individual> = (0..population_size)
+            .into_par_iter() // Convert the range into a parallel iterator
             .map(|_| {
+                let mut rng = rand::thread_rng(); // Thread-local RNG for safe random number generation
                 let translation = Vec3::new(
                     mean_translation.x + rng.gen::<f32>() * std_dev_translation.x,
                     mean_translation.y + rng.gen::<f32>() * std_dev_translation.y,
@@ -135,6 +127,8 @@ pub fn evolution_strategy(
         population.extend(mutated_population);
         population.sort_by(|a, b| a.fitness.partial_cmp(&b.fitness).unwrap());
         population.truncate(population_size);
+
+        if verbose { println!("Generation {} | Best fitness: {}", g, population[0].fitness); }
 
         // Check convergence
         if population[0].fitness < convergence_threshold {
