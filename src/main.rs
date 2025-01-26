@@ -254,7 +254,7 @@ fn run_algorithm(
     /*println!("Running algorithm!");
 
     // Change to try other algorithms
-    let solver = Solver::DE;
+    let solver = Solver::GA;
 
     let result = solve(source_points, target_points, &solver, true);
 
@@ -388,10 +388,10 @@ fn solve(source_points: &Vec<[f32; 3]>, target_points: &Vec<[f32; 3]>, solver: &
             &target_points, 
             100, 
             100, 
-            0.1, 
+            0.3, 
             3,
             0.5,
-            10,
+            100,
             verbose
         ),
         Solver::ES => evolution_strategy(
