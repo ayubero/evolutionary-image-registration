@@ -251,10 +251,10 @@ fn run_algorithm(
     let source: Vec<Vec3> = source_points.iter().map(|&p| Vec3::from(p)).collect();
     let target: Vec<Vec3> = target_points.iter().map(|&p| Vec3::from(p)).collect();
 
-    println!("Running algorithm!");
+    /*println!("Running algorithm!");
 
     // Change to try other algorithms
-    let solver = Solver::ES;
+    let solver = Solver::DE;
 
     let result = solve(source_points, target_points, &solver, true);
 
@@ -271,14 +271,14 @@ fn run_algorithm(
         Err(err) => {
             eprintln!("Algorithm failed: {}", err);
         }
-    }
+    }*/
 
     // Run tests
-    /*println!("Running tests");
+    println!("Running test");
     let mut best_transform = Transform::default();
     let mut best_score = f32::INFINITY;
     let variants = [Solver::ICP, Solver::GA, Solver::ES, Solver::PSO, Solver::DE];
-    let num_repeats = 10;
+    let num_repeats = 30;
 
     // Collect results
     let mut results = Vec::new();
@@ -301,8 +301,13 @@ fn run_algorithm(
 
                     // Get best transform
                     if error < best_score {
-                        best_transform = transform;
-                        best_score = error;
+                        match solver { 
+                            Solver::PSO => {},
+                            _ => { // PSO is not reliable, so we discard it as global best
+                                best_transform = transform;
+                                best_score = error;
+                            }
+                        }
                     }
 
                     // Save results
@@ -350,10 +355,12 @@ fn run_algorithm(
     let agg_df = lazy_df
         .group_by([col("Solver")])
         .agg([
-            col("Residual Error").mean().alias("Mean Residual Error"),
-            col("Time Taken (s)").mean().alias("Mean Time Taken (s)"),
+            col("Residual Error").mean().alias("Mean Error"),
+            col("Residual Error").std(1).alias("Std. Dev. Error"),
+            col("Time Taken (s)").mean().alias("Mean Time (s)"),
+            col("Time Taken (s)").std(1).alias("Std. Dev. Time (s)"),
         ])
-        .sort(["Mean Residual Error"], Default::default())
+        .sort(["Mean Error"], Default::default())
         .collect()
         .unwrap();
 
@@ -362,7 +369,7 @@ fn run_algorithm(
     
     // Update the Transform
     object_position.0.translation = best_transform.translation;
-    object_position.0.rotation = best_transform.rotation;*/
+    object_position.0.rotation = best_transform.rotation;
 
 }
 
@@ -399,21 +406,23 @@ fn solve(source_points: &Vec<[f32; 3]>, target_points: &Vec<[f32; 3]>, solver: &
         Solver::PSO => particle_swarm_optimization(
             &source_points,
             &target_points,
-            50,
             100,
-            0.7,
-            1.5,
-            1.5,
+            100,
+            0.7298,
+            1.0,
+            2.1,
+            1.2,
+            0.0,
             0.5,
             verbose
         ),
         Solver::DE => differential_evolution(
             &source_points,
             &target_points,
-            50,
             100,
-            0.7,
-            0.8,
+            100,
+            0.5,
+            0.5,
             0.5,
             verbose
         )

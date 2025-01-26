@@ -11,7 +11,7 @@ pub fn differential_evolution(
     population_size: usize,
     generations: usize,
     crossover_probability: f32,
-    differential_weight: f32,
+    scale_factor: f32,
     convergence_threshold: f32,
     verbose: bool
 ) -> Result<Transform, String> {
@@ -70,13 +70,13 @@ pub fn differential_evolution(
 
             // Perform mutation: Create a trial vector
             let mutant_translation = population[a].transform.translation
-                + differential_weight
+                + scale_factor
                     * (population[b].transform.translation - population[c].transform.translation);
 
             let mutant_rotation = Quat::from_euler(
                 bevy::math::EulerRot::XYZ,
                 population[a].transform.rotation.to_euler(bevy::math::EulerRot::XYZ).0
-                    + differential_weight
+                    + scale_factor
                         * (population[b]
                             .transform
                             .rotation
@@ -88,7 +88,7 @@ pub fn differential_evolution(
                                 .to_euler(bevy::math::EulerRot::XYZ)
                                 .0),
                 population[a].transform.rotation.to_euler(bevy::math::EulerRot::XYZ).1
-                    + differential_weight
+                    + scale_factor
                         * (population[b]
                             .transform
                             .rotation
@@ -100,7 +100,7 @@ pub fn differential_evolution(
                                 .to_euler(bevy::math::EulerRot::XYZ)
                                 .1),
                 population[a].transform.rotation.to_euler(bevy::math::EulerRot::XYZ).2
-                    + differential_weight
+                    + scale_factor
                         * (population[b]
                             .transform
                             .rotation

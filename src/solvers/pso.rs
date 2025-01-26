@@ -10,9 +10,11 @@ pub fn particle_swarm_optimization(
     target: &Vec<[f32; 3]>,
     population_size: usize,
     iterations: usize,
+    constriction_factor: f32,
     inertia_weight: f32,
     cognitive_weight: f32,
     social_weight: f32,
+    initial_weight: f32,
     convergence_threshold: f32,
     verbose: bool,
 ) -> Result<Transform, String> {
@@ -32,6 +34,7 @@ pub fn particle_swarm_optimization(
         velocity: Transform,
         best_position: Transform,
         best_fitness: f32,
+        initial_position: Transform
     }
 
     // Initialize the particle swarm
@@ -61,6 +64,7 @@ pub fn particle_swarm_optimization(
                 },
                 best_position: position,
                 best_fitness: f32::INFINITY,
+                initial_position: position.clone()
             }
         })
         .collect();
@@ -124,28 +128,39 @@ pub fn particle_swarm_optimization(
                     * social_weight
                     * thread_rng.gen::<f32>();
 
-                particle.velocity.translation = inertia + cognitive + social;
+                let initial_influence = (particle.initial_position.translation
+                    - particle.position.translation)
+                    * initial_weight
+                    * thread_rng.gen::<f32>();
+
+                particle.velocity.translation = constriction_factor * (
+                    inertia + cognitive + social + initial_influence
+                );
 
                 particle.position.translation += particle.velocity.translation;
 
                 // Update rotation using SLERP for smoothness
                 let rotation_inertia = particle.velocity.rotation.slerp(Quat::IDENTITY, inertia_weight);
 
-                let rotation_cognitive = Quat::from_euler(
-                    bevy::math::EulerRot::XYZ,
-                    thread_rng.gen::<f32>() * cognitive_weight,
-                    thread_rng.gen::<f32>() * cognitive_weight,
+                // Calculate rotation cognitive component
+                let rotation_cognitive = particle.position.rotation.slerp(
+                    particle.best_position.rotation,
                     thread_rng.gen::<f32>() * cognitive_weight,
                 );
 
-                let rotation_social = Quat::from_euler(
-                    bevy::math::EulerRot::XYZ,
-                    thread_rng.gen::<f32>() * social_weight,
-                    thread_rng.gen::<f32>() * social_weight,
+                // Calculate rotation social component
+                let rotation_social = particle.position.rotation.slerp(
+                    global_best_position.rotation,
                     thread_rng.gen::<f32>() * social_weight,
                 );
 
-                particle.velocity.rotation = rotation_inertia * rotation_cognitive * rotation_social;
+                // Calculate rotation initial influence
+                let rotation_initial = particle.position.rotation.slerp(
+                    particle.initial_position.rotation,
+                    thread_rng.gen::<f32>() * initial_weight,
+                );
+
+                particle.velocity.rotation = rotation_inertia * rotation_cognitive * rotation_social * rotation_initial;
 
                 particle.position.rotation *= particle.velocity.rotation;
             });
