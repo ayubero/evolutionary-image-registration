@@ -251,10 +251,10 @@ fn run_algorithm(
     let source: Vec<Vec3> = source_points.iter().map(|&p| Vec3::from(p)).collect();
     let target: Vec<Vec3> = target_points.iter().map(|&p| Vec3::from(p)).collect();
 
-    /*println!("Running algorithm!");
+    println!("Running algorithm!");
 
     // Change to try other algorithms
-    let solver = Solver::ICP;
+    let solver = Solver::ES;
 
     let result = solve(source_points, target_points, &solver, true);
 
@@ -271,14 +271,14 @@ fn run_algorithm(
         Err(err) => {
             eprintln!("Algorithm failed: {}", err);
         }
-    }*/
+    }
 
-    // Try all algorithms
-    println!("Running all algorithms");
+    // Run tests
+    /*println!("Running tests");
     let mut best_transform = Transform::default();
     let mut best_score = f32::INFINITY;
     let variants = [Solver::ICP, Solver::GA, Solver::ES, Solver::PSO, Solver::DE];
-    let num_repeats = 2;
+    let num_repeats = 10;
 
     // Collect results
     let mut results = Vec::new();
@@ -295,7 +295,7 @@ fn run_algorithm(
                 Ok(transform) => {
                     // Compute error
                     let error = fitness(&transform, &source, &target);
-                    println!("Solver: {:<3} | Residual error: {:<11} | Time: {:?}", 
+                    println!("Solver: {:<3} | Residual error: {:<10} | Time: {:?}", 
                         solver.to_str(), error, duration
                     );
 
@@ -362,7 +362,7 @@ fn run_algorithm(
     
     // Update the Transform
     object_position.0.translation = best_transform.translation;
-    object_position.0.rotation = best_transform.rotation;
+    object_position.0.rotation = best_transform.rotation;*/
 
 }
 
@@ -380,9 +380,11 @@ fn solve(source_points: &Vec<[f32; 3]>, target_points: &Vec<[f32; 3]>, solver: &
             &source_points, 
             &target_points, 
             100, 
-            50, 
-            0.5, 
+            100, 
+            0.1, 
+            3,
             0.5,
+            10,
             verbose
         ),
         Solver::ES => evolution_strategy(

@@ -22,7 +22,7 @@ pub fn particle_swarm_optimization(
 
     let mut rng = thread_rng();
 
-    // Preprocess points into `Vec3` for easier calculations
+    // Preprocess points into Vec3 for easier calculations
     let source_points: Vec<Vec3> = source.iter().map(|&p| Vec3::from(p)).collect();
     let target_points: Vec<Vec3> = target.iter().map(|&p| Vec3::from(p)).collect();
 

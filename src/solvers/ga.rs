@@ -11,7 +11,9 @@ pub fn genetic_algorithm(
     population_size: usize,
     generations: usize,
     mutation_rate: f32,
+    tournament_size: usize,
     convergence_threshold: f32,
+    stopping_threshold: usize, // If there is no improvement in stopping_threshold iterations, stop
     verbose: bool
 ) -> Result<Transform, String> {
     if source.is_empty() || target.is_empty() {
@@ -26,9 +28,9 @@ pub fn genetic_algorithm(
             let mut rng = rand::thread_rng();
             Transform {
                 translation: Vec3::new(
-                    rng.gen_range(-5.0..5.0),
-                    rng.gen_range(-5.0..5.0),
-                    rng.gen_range(-5.0..5.0),
+                    rng.gen_range(-1.0..1.0),
+                    rng.gen_range(-1.0..1.0),
+                    rng.gen_range(-1.0..1.0),
                 ),
                 rotation: Quat::from_euler(
                     bevy::math::EulerRot::XYZ,
@@ -47,6 +49,7 @@ pub fn genetic_algorithm(
 
     let mut best_transform = None;
     let mut best_fitness = f32::INFINITY;
+    let mut no_improvement_counter = 0;
 
     for g in 0..generations {
         // Evaluate fitness
@@ -61,7 +64,18 @@ pub fn genetic_algorithm(
         if fitness_scores[0].0 < best_fitness {
             best_fitness = fitness_scores[0].0;
             best_transform = Some(*fitness_scores[0].1);
+            no_improvement_counter = 0; // Reset counter if improvement
             if verbose { println!("Generation {} | Best fitness: {}", g, best_fitness); }
+        } else {
+            no_improvement_counter += 1;
+        }
+
+        // Stop if no improvement in the last stopping_threshold generations
+        if no_improvement_counter >= stopping_threshold {
+            if verbose { 
+                println!("No improvement in the last {} generations. Stopping early.", stopping_threshold) 
+            };
+            break;
         }
 
         // Check for convergence
@@ -69,11 +83,31 @@ pub fn genetic_algorithm(
             break;
         }
 
-        // Selection
-        let selected: Vec<Transform> = fitness_scores
+        // Truncated selection
+        /*let selected: Vec<Transform> = fitness_scores
             .iter()
             .take(population_size / 2)
             .map(|(_, t)| **t)
+            .collect();*/
+
+        // Tournament selection
+        let selected: Vec<Transform> = (0..population_size / 2)
+            .map(|_| {
+                // Build a tournament
+                let tournament: Vec<&(f32, &Transform)> = (0..tournament_size)
+                    .map(|_| {
+                        let index = rng.gen_range(0..fitness_scores.len());
+                        &fitness_scores[index]
+                    })
+                    .collect();
+
+                // Select the best individual in the tournament
+                tournament
+                    .iter()
+                    .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+                    .map(|(_, t)| (*t).clone()) // Dereference &Transform to Transform
+                    .unwrap()
+            })
             .collect();
 
         // Crossover (combine parents to create new offspring)

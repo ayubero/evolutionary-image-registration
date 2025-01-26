@@ -63,7 +63,7 @@ pub fn differential_evolution(
     // Perform Differential Evolution
     for g in 0..generations {
         for i in 0..population_size {
-            // Select three random, distinct individuals (not including `i`)
+            // Select three random, distinct individuals (not including i)
             let mut indices: Vec<usize> = (0..population_size).filter(|&idx| idx != i).collect();
             indices.shuffle(&mut rng);
             let (a, b, c) = (indices[0], indices[1], indices[2]);

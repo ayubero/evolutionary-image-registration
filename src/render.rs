@@ -59,8 +59,6 @@ pub fn rgbd_to_mesh<T: AsRef<Path>>(color_path: T, depth_path: T) -> (Vec<[f32; 
         panic!("Expected an 8-bit RGB image!");
     }
 
-    //positions = uniform_random_sample_positions(&positions, 1000);
-
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
 
